@@ -6,8 +6,16 @@
       ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'IT Admin'",
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('role').val() === 'IT Admin')",
-        ".write": "auth != null && ((auth.uid === $uid && !data.exists() && !root.child('users').exists() && newData.child('role').val() === 'IT Admin') || root.child('users').child(auth.uid).child('role').val() === 'IT Admin' || (auth.uid === $uid && data.exists() && newData.child('role').val() === data.child('role').val() && newData.child('email').val() === data.child('email').val()))",
+        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'IT Admin' || (auth.uid === $uid && data.exists() && newData.child('role').val() === data.child('role').val() && newData.child('email').val() === data.child('email').val() && newData.child('status').val() === data.child('status').val()))",
         ".validate": "newData.hasChildren(['name', 'email', 'role', 'department', 'status']) && (newData.child('role').val() === 'Employee' || newData.child('role').val() === 'IT Technician' || newData.child('role').val() === 'IT Admin' || newData.child('role').val() === 'Management')"
+      }
+    },
+    "tickets": {
+      ".indexOn": ["requesterId"],
+      ".read": "auth != null && root.child('users').child(auth.uid).child('status').val() === 'Active' && (root.child('users').child(auth.uid).child('role').val() === 'IT Admin' || root.child('users').child(auth.uid).child('role').val() === 'IT Technician' || root.child('users').child(auth.uid).child('role').val() === 'Management' || (query.orderByChild === 'requesterId' && query.equalTo === auth.uid))",
+      "$ticketId": {
+        ".write": "auth != null && root.child('users').child(auth.uid).child('status').val() === 'Active' && ((root.child('users').child(auth.uid).child('role').val() === 'IT Admin' || root.child('users').child(auth.uid).child('role').val() === 'IT Technician') || (!data.exists() && newData.child('requesterId').val() === auth.uid && newData.child('status').val() === 'Open' && newData.child('technicianId').val() === ''))",
+        ".validate": "newData.hasChildren(['subject', 'description', 'category', 'priority', 'status', 'location', 'impact', 'requesterId', 'requester', 'department', 'technicianId', 'technician', 'createdAt', 'updatedAt']) && newData.child('subject').isString() && newData.child('description').isString() && newData.child('requesterId').isString() && newData.child('createdAt').isNumber() && (newData.child('status').val() === 'Open' || newData.child('status').val() === 'In Progress' || newData.child('status').val() === 'Pending' || newData.child('status').val() === 'Resolved')"
       }
     }
   }
