@@ -1,0 +1,1690 @@
+[/workspaces/default/code/src/imports/pasted_text/it-helpdesk-spec.md#b9d9]
+1:Create a modern, professional, responsive **IT Helpdesk Ticketing System** web application for an internal company IT department.
+2:
+3:The system will be used by employees to submit IT issues, by the IT team to receive, assign, track, troubleshoot, update, resolve, and report on tickets, and by Management to monitor overall IT operations, major incidents, SLA status, recurring issues, workload, and issues requiring management attention.
+4:
+5:The final design should look like a real production-ready internal IT Helpdesk system, not a conceptual landing page.
+6:
+7:Use a clean enterprise dashboard design that is simple enough for non-technical users while still providing detailed operational tools for IT staff.
+8:
+9:---
+10:
+11:# USER ROLES
+12:
+13:Create 4 user roles with proper role-based access control.
+14:
+15:## 1. Employee / Requester
+16:
+17:Employees mainly use the system to report problems and follow up on their requests.
+18:
+19:Permissions:
+20:
+21:* Create new tickets
+22:* View own tickets
+23:* Check ticket status
+24:* Add comments and replies
+25:* Upload screenshots, photos, documents, or logs
+26:* Receive ticket updates
+27:* View technician responses
+28:* Confirm whether an issue has been resolved
+29:* Reopen a recently resolved ticket if the issue persists
+30:* Search Knowledge Base articles
+31:
+32:Employees must NOT be able to:
+33:
+34:* View private tickets belonging to other employees
+35:* Access internal IT notes
+36:* Assign technicians
+37:* Modify SLA
+38:* Access administration settings
+39:* Modify other users
+40:* View sensitive IT configuration
+41:
+42:---
+43:
+44:## 2. IT Technician
+45:
+46:IT Technicians are responsible for troubleshooting and resolving tickets.
+47:
+48:Permissions:
+49:
+50:* View tickets assigned to them
+51:* View relevant unassigned tickets
+52:* Accept tickets
+53:* Update ticket status
+54:* Change ticket priority where permitted
+55:* Communicate with requester
+56:* Add troubleshooting information
+57:* Add internal IT notes
+58:* Upload attachments
+59:* Record Findings
+60:* Record Action Taken
+61:* Record Result
+62:* Record Root Cause
+63:* Record Recommendation
+64:* Record Completion Date
+65:* Track time spent on a ticket
+66:* Link IT assets to tickets
+67:* Resolve tickets
+68:* Escalate tickets to IT Admin / Team Lead
+69:* Search Knowledge Base articles
+70:* Create Knowledge Base drafts where permitted
+71:
+72:---
+73:
+74:## 3. IT Admin / Team Lead
+75:
+76:IT Admin / Team Lead has full operational control of the Helpdesk system.
+77:
+78:Permissions:
+79:
+80:* View all tickets
+81:* Create tickets on behalf of users
+82:* Assign and reassign technicians
+83:* Manage ticket priorities
+84:* Manage ticket categories
+85:* Manage departments
+86:* Manage locations
+87:* Manage SLA rules
+88:* Escalate tickets
+89:* Reopen tickets
+90:* Close tickets
+91:* Manage technicians and users
+92:* Manage IT assets
+93:* Manage Knowledge Base
+94:* Access internal IT notes
+95:* Access audit logs
+96:* View all reports
+97:* Configure ticketing system settings
+98:* Manage notification settings
+99:* View technician workloads
+100:* View management escalations
+101:
+102:---
+103:
+104:## 4. Management
+105:
+106:Management requires high-level visibility of IT operations without needing to manage technical ticket details.
+107:
+108:Management should primarily have READ-ONLY access.
+109:
+110:Management can:
+111:
+112:* View Management Dashboard
+113:* View all active tickets
+114:* View critical and high-priority tickets
+115:* View escalated tickets
+116:* View ticket status
+117:* View ticket priority
+118:* View ticket category
+119:* View affected department
+120:* View affected location
+121:* View assigned technician
+122:* View SLA status
+123:* View overdue tickets
+124:* View resolved tickets
+125:* View major incidents
+126:* View IT workload
+127:* View recurring issues
+128:* View ticket trends
+129:* View operational summaries
+130:* View asset-related incidents
+131:* View reports and analytics
+132:* Export reports
+133:
+134:Management must NOT normally be able to:
+135:
+136:* Edit troubleshooting information
+137:* Modify internal IT technical notes
+138:* Change ticket status
+139:* Assign technicians
+140:* Change ticket priority
+141:* Modify SLA rules
+142:* Edit system configuration
+143:* Delete tickets
+144:
+145:Management may add a special:
+146:
+147:**Management Comment**
+148:
+149:Management Comments are different from normal comments and Internal IT Notes.
+150:
+151:Management Comments should be visible to:
+152:
+153:* Management
+154:* IT Admin / Team Lead
+155:* Relevant IT Technician
+156:
+157:Management Comments may be used for:
+158:
+159:* Follow-up requests
+160:* Priority concerns
+161:* Management instructions
+162:* Requesting additional information
+163:* Requesting progress updates
+164:* Approval comments
+165:
+166:---
+167:
+168:# LOGIN PAGE
+169:
+170:Create a professional Login page.
+171:
+172:Include:
+173:
+174:* Company Logo
+175:* System Name: IT Helpdesk
+176:* Email / Username
+177:* Password
+178:* Remember Me
+179:* Forgot Password
+180:* Sign In button
+181:
+182:After login, automatically display the appropriate interface based on the user's assigned role.
+183:
+184:---
+185:
+186:# ROLE-BASED NAVIGATION
+187:
+188:## Employee Sidebar
+189:
+190:* Dashboard
+191:* Create Ticket
+192:* My Tickets
+193:* Knowledge Base
+194:* Notifications
+195:* My Profile
+196:
+197:---
+198:
+199:## IT Technician Sidebar
+200:
+201:* Dashboard
+202:* My Assigned Tickets
+203:* Unassigned Tickets
+204:* Tickets
+205:* Assets
+206:* Knowledge Base
+207:* Notifications
+208:* My Profile
+209:
+210:---
+211:
+212:## IT Admin / Team Lead Sidebar
+213:
+214:* Dashboard
+215:* Tickets
+216:* Create Ticket
+217:* Assigned Tickets
+218:* Unassigned Tickets
+219:* Assets
+220:* Reports
+221:* Users
+222:* Categories
+223:* Departments
+224:* Locations
+225:* Knowledge Base
+226:* Audit Log
+227:* Settings
+228:
+229:---
+230:
+231:## Management Sidebar
+232:
+233:* Management Dashboard
+234:* Active Issues
+235:* Critical Issues
+236:* Escalated Issues
+237:* Reports
+238:* Locations
+239:* IT Overview
+240:* Recurring Issues
+241:
+242:Allow all sidebars to collapse.
+243:
+244:At the bottom show:
+245:
+246:* User avatar
+247:* User name
+248:* Role
+249:* Profile
+250:* Logout
+251:
+252:---
+253:
+254:# TOP NAVIGATION
+255:
+256:Include:
+257:
+258:* Company Logo
+259:* IT Helpdesk system name
+260:* Global Search
+261:* Notification Bell
+262:* User Avatar
+263:* Current User
+264:* User Role
+265:* Profile Menu
+266:
+267:---
+268:
+269:# STANDARD IT DASHBOARD
+270:
+271:Create a clean IT operational dashboard.
+272:
+273:Top statistic cards:
+274:
+275:* Total Open Tickets
+276:* New Tickets
+277:* Assigned Tickets
+278:* In Progress
+279:* Pending
+280:* Resolved
+281:* Overdue
+282:* SLA Breached
+283:
+284:Create sections for:
+285:
+286:## Tickets by Priority
+287:
+288:* Critical
+289:* High
+290:* Medium
+291:* Low
+292:
+293:## Tickets by Category
+294:
+295:Examples:
+296:
+297:* Hardware
+298:* Software
+299:* Network
+300:* Internet
+301:* Printer
+302:* CCTV
+303:* Email
+304:* Account / Access
+305:* Server
+306:* System
+307:* Other
+308:
+309:Create charts showing:
+310:
+311:* Tickets Created vs Resolved
+312:* Tickets by Category
+313:* Tickets by Priority
+314:* Technician Workload
+315:* Monthly Ticket Trends
+316:* SLA Performance
+317:
+318:---
+319:
+320:# RECENT TICKETS
+321:
+322:Create a Recent Tickets table.
+323:
+324:Columns:
+325:
+326:* Ticket ID
+327:* Subject
+328:* Requester
+329:* Department
+330:* Location
+331:* Category
+332:* Priority
+333:* Assigned Technician
+334:* Status
+335:* Created Date
+336:* SLA
+337:* Action
+338:
+339:Allow row click to open Ticket Details.
+340:
+341:---
+342:
+343:# MANAGEMENT DASHBOARD
+344:
+345:Create a separate dashboard specifically for Management.
+346:
+347:The Management Dashboard should provide a simple executive overview and avoid overwhelming Management with unnecessary technical detail.
+348:
+349:Top cards:
+350:
+351:* Total Active Tickets
+352:* Critical Tickets
+353:* High Priority Tickets
+354:* Overdue Tickets
+355:* SLA Breached
+356:* Pending Tickets
+357:* Resolved This Month
+358:* Escalated Issues
+359:* Issues Requiring Management Attention
+360:
+361:---
+362:
+363:# CURRENT IT OPERATIONAL STATUS
+364:
+365:Create a section called:
+366:
+367:**Current IT Operational Status**
+368:
+369:Show important ongoing issues such as:
+370:
+371:* Critical incidents
+372:* Major service interruptions
+373:* Internet / Network issues
+374:* Server issues
+375:* System failures
+376:* CCTV issues
+377:* Important hardware failures
+378:* Vendor-related problems
+379:* Issues affecting business operations
+380:
+381:Each item should display:
+382:
+383:* Ticket ID
+384:* Issue
+385:* Location
+386:* Department
+387:* Priority
+388:* Status
+389:* Assigned Technician
+390:* How long the issue has been open
+391:* SLA status
+392:* Latest Update
+393:
+394:---
+395:
+396:# MANAGEMENT ATTENTION REQUIRED
+397:
+398:Create a prominent section called:
+399:
+400:**Management Attention Required**
+401:
+402:Only show tickets that need management visibility.
+403:
+404:Examples:
+405:
+406:* Critical incident
+407:* SLA breach
+408:* Repeated system failure
+409:* Large operational impact
+410:* Important equipment failure
+411:* Vendor delay
+412:* High-cost repair
+413:* Replacement approval required
+414:* Purchase approval required
+415:* Issue affecting several departments
+416:* Long unresolved issue
+417:* External contractor required
+418:
+419:Display:
+420:
+421:* Ticket ID
+422:* Subject
+423:* Location
+424:* Department
+425:* Business Impact
+426:* Priority
+427:* Status
+428:* Responsible Technician
+429:* Latest Update
+430:* Management Action Required
+431:* Approval Status
+432:
+433:Use a clear badge when:
+434:
+435:**Approval Required**
+436:
+437:---
+438:
+439:# LOCATION OVERVIEW
+440:
+441:Create location cards.
+442:
+443:Example locations:
+444:
+445:* KK Office
+446:* Kinabalu Park
+447:* Pendant Hut
+448:* Other Sites
+449:
+450:Each location card should display:
+451:
+452:* Open Tickets
+453:* Critical Issues
+454:* High Priority Issues
+455:* Pending Issues
+456:* SLA Breaches
+457:* Operational Status
+458:
+459:Operational status indicators:
+460:
+461:* Normal
+462:* Attention Required
+463:* Major Issue
+464:
+465:Allow clicking the location card to see all tickets for that site.
+466:
+467:---
+468:
+469:# CREATE TICKET
+470:
+471:Create a professional ticket submission form.
+472:
+473:Fields:
+474:
+475:## Ticket Information
+476:
+477:### Ticket ID
+478:
+479:Automatically generated after submission.
+480:
+481:Example:
+482:
+483:IT-2026-0001
+484:
+485:### Subject
+486:
+487:Short description of the problem.
+488:
+489:### Description
+490:
+491:Large rich-text area.
+492:
+493:Prompt the user to explain:
+494:
+495:* What happened?
+496:* When did it happen?
+497:* What system/device is affected?
+498:* Is work completely stopped or partially affected?
+499:
+500:### Category
+501:
+502:Dropdown options:
+503:
+504:* Hardware
+505:* Software
+506:* Network
+507:* Internet
+508:* Printer
+509:* CCTV
+510:* Email
+511:* User Account
+512:* Server
+513:* System
+514:* Electrical / Technical
+515:* Other
+516:
+517:### Subcategory
+518:
+519:Dynamic dropdown depending on Category.
+520:
+521:### Priority
+522:
+523:* Low
+524:* Medium
+525:* High
+526:* Critical
+527:
+528:### Department
+529:
+530:Dropdown.
+531:
+532:### Location
+533:
+534:Example:
+535:
+536:* KK Office
+537:* Kinabalu Park
+538:* Pendant Hut
+539:* Level 2
+540:* Level 3
+541:* Other
+542:
+543:### Affected Device / Asset
+544:
+545:Optional asset selector.
+546:
+547:### Business Impact
+548:
+549:Options:
+550:
+551:* Single User
+552:* Multiple Users
+553:* Department
+554:* Location / Site
+555:* Entire Company
+556:
+557:### Attachment
+558:
+559:Allow:
+560:
+561:* Screenshot
+562:* Photo
+563:* PDF
+564:* Word document
+565:* Excel
+566:* Log file
+567:
+568:### Preferred Contact Method
+569:
+570:* System
+571:* Email
+572:* Phone
+573:* WhatsApp
+574:
+575:Buttons:
+576:
+577:* Cancel
+578:* Save Draft
+579:* Submit Ticket
+580:
+581:---
+582:
+583:# TICKET LIST
+584:
+585:Create a professional ticket-management table.
+586:
+587:Columns:
+588:
+589:* Ticket ID
+590:* Subject
+591:* Requester
+592:* Department
+593:* Category
+594:* Location
+595:* Priority
+596:* Assigned Technician
+597:* Status
+598:* Created
+599:* Last Updated
+600:* SLA
+601:* Action
+602:
+603:Add filters:
+604:
+605:* Search
+606:* Status
+607:* Priority
+608:* Category
+609:* Technician
+610:* Department
+611:* Location
+612:* Date Range
+613:* SLA Status
+614:
+615:Include:
+616:
+617:* Sorting
+618:* Pagination
+619:* Export
+620:* Column customization
+621:
+622:Allow switching between:
+623:
+624:* Table View
+625:* Kanban View
+626:
+627:---
+628:
+629:# KANBAN VIEW
+630:
+631:Create columns:
+632:
+633:* New
+634:* Assigned
+635:* In Progress
+636:* Pending User
+637:* Pending Vendor
+638:* Resolved
+639:* Closed
+640:
+641:Each ticket card displays:
+642:
+643:* Ticket ID
+644:* Subject
+645:* Requester
+646:* Priority
+647:* Category
+648:* Location
+649:* Assigned Technician
+650:* Time Open
+651:* SLA Indicator
+652:
+653:Allow authorized IT users to drag tickets between statuses.
+654:
+655:---
+656:
+657:# TICKET DETAILS PAGE
+658:
+659:Create a detailed Ticket Workspace.
+660:
+661:Header:
+662:
+663:* Ticket ID
+664:* Ticket Subject
+665:* Status
+666:* Priority
+667:* SLA Indicator
+668:* Created Date
+669:* Last Updated Date
+670:* Requester
+671:* Assigned Technician
+672:
+673:Main ticket information:
+674:
+675:* Description
+676:* Category
+677:* Subcategory
+678:* Department
+679:* Location
+680:* Business Impact
+681:* Affected Asset
+682:* Attachments
+683:
+684:---
+685:
+686:# TICKET ACTIVITY TIMELINE
+687:
+688:Create an activity timeline.
+689:
+690:Example events:
+691:
+692:* Employee submitted ticket
+693:* Ticket automatically created
+694:* Technician assigned
+695:* Priority changed
+696:* Technician changed status to In Progress
+697:* Technician added Findings
+698:* Technician added Action Taken
+699:* Employee replied
+700:* Ticket escalated
+701:* Management comment added
+702:* Technician resolved issue
+703:* User confirmed resolution
+704:* Ticket closed
+705:
+706:Show:
+707:
+708:* User Avatar
+709:* User Name
+710:* Role
+711:* Activity
+712:* Date
+713:* Time
+714:
+715:---
+716:
+717:# IT ACTION PANEL
+718:
+719:Create a right-side IT Action Panel.
+720:
+721:Fields:
+722:
+723:* Assigned Technician
+724:* Status
+725:* Priority
+726:* Category
+727:* SLA Due Date
+728:* Time Spent
+729:* Escalation Level
+730:
+731:Status options:
+732:
+733:* New
+734:* Assigned
+735:* In Progress
+736:* Pending User
+737:* Pending Vendor
+738:* Pending Approval
+739:* Resolved
+740:* Closed
+741:* Cancelled
+742:
+743:Buttons:
+744:
+745:* Update Ticket
+746:* Resolve Ticket
+747:* Reassign
+748:* Escalate
+749:* Request Approval
+750:* Close Ticket
+751:
+752:---
+753:
+754:# TROUBLESHOOTING AND IT SUPPORT REPORT
+755:
+756:Create dedicated structured fields for IT technicians.
+757:
+758:## Issue
+759:
+760:Automatically use ticket Subject and Description.
+761:
+762:## Findings
+763:
+764:What was discovered during troubleshooting.
+765:
+766:## Action Taken
+767:
+768:What actions were performed.
+769:
+770:## Result
+771:
+772:Outcome after troubleshooting.
+773:
+774:## Root Cause
+775:
+776:Cause of issue if known.
+777:
+778:## Recommendation
+779:
+780:Recommended preventive or future action.
+781:
+782:## Completion Date
+783:
+784:Date work was completed.
+785:
+786:## Status
+787:
+788:Current status of work.
+789:
+790:Allow this information to automatically generate an:
+791:
+792:**IT Support Report**
+793:
+794:Report format:
+795:
+796:* Ticket ID
+797:* Issue
+798:* Findings
+799:* Action Taken
+800:* Result
+801:* Root Cause
+802:* Recommendation
+803:* Completion Date
+804:* Technician
+805:* Status
+806:
+807:Provide:
+808:
+809:* Export PDF
+810:* Print
+811:* Email Report
+812:
+813:---
+814:
+815:# INTERNAL IT NOTES
+816:
+817:Create Internal Notes.
+818:
+819:Internal Notes:
+820:
+821:* Visible only to IT personnel
+822:* Not visible to normal employees
+823:* Clearly distinguish them from public replies
+824:* Support attachments
+825:* Display author
+826:* Display date and time
+827:
+828:Use a noticeable badge:
+829:
+830:**Internal Note**
+831:
+832:---
+833:
+834:# MANAGEMENT COMMENTS
+835:
+836:Create Management Comments separately.
+837:
+838:Show badge:
+839:
+840:**Management Comment**
+841:
+842:Visible only to:
+843:
+844:* Management
+845:* IT Admin
+846:* Assigned Technician
+847:
+848:Allow Management to request:
+849:
+850:* Status Update
+851:* Additional Information
+852:* Follow-Up
+853:* Approval Information
+854:
+855:---
+856:
+857:# SLA MANAGEMENT
+858:
+859:Display SLA indicators.
+860:
+861:Use:
+862:
+863:Green:
+864:Within SLA
+865:
+866:Orange:
+867:Approaching SLA
+868:
+869:Red:
+870:SLA Breached
+871:
+872:Show:
+873:
+874:* First Response Target
+875:* First Response Actual
+876:* Resolution Target
+877:* Resolution Actual
+878:* Time Remaining
+879:* Time Used
+880:* SLA Status
+881:
+882:---
+883:
+884:# ESCALATION
+885:
+886:Create an escalation system.
+887:
+888:Escalation levels:
+889:
+890:* Level 1 – Technician
+891:* Level 2 – IT Team Lead
+892:* Level 3 – Management
+893:* External – Vendor / Contractor
+894:
+895:Display escalation history.
+896:
+897:Allow ticket escalation when:
+898:
+899:* SLA is near breach
+900:* SLA is breached
+901:* Technician requires assistance
+902:* Approval is required
+903:* Issue impacts multiple users
+904:* Issue impacts business operations
+905:* Vendor intervention is needed
+906:
+907:---
+908:
+909:# APPROVAL WORKFLOW
+910:
+911:Add an Approval feature.
+912:
+913:Possible approvals:
+914:
+915:* Purchase
+916:* Equipment Replacement
+917:* Vendor Engagement
+918:* Repair Cost
+919:* Subscription Purchase
+920:* Software Purchase
+921:* Project Work
+922:* Other
+923:
+924:Approval request should show:
+925:
+926:* Ticket ID
+927:* Requested By
+928:* Request Type
+929:* Description
+930:* Reason
+931:* Estimated Cost
+932:* Attachment / Quotation
+933:* Requested Date
+934:
+935:Management can:
+936:
+937:* Approve
+938:* Reject
+939:* Request More Information
+940:* Add Comment
+941:
+942:Keep full approval history.
+943:
+944:---
+945:
+946:# ASSET MANAGEMENT
+947:
+948:Allow tickets to link to IT assets.
+949:
+950:Asset information:
+951:
+952:* Asset ID
+953:* Device Name
+954:* Asset Type
+955:* Brand
+956:* Model
+957:* Serial Number
+958:* Location
+959:* Assigned User
+960:* Department
+961:* IP Address
+962:* MAC Address
+963:* Purchase Date
+964:* Warranty
+965:* Status
+966:
+967:Asset status:
+968:
+969:* Active
+970:* Spare
+971:* Under Repair
+972:* Faulty
+973:* Retired
+974:
+975:On the Asset Details page show:
+976:
+977:* Asset Information
+978:* Current User
+979:* Location
+980:* Previous Tickets
+981:* Repair History
+982:* Maintenance History
+983:* Warranty
+984:* Attachments
+985:
+986:---
+987:
+988:# REPORTS
+989:
+990:Create a comprehensive IT reporting dashboard.
+991:
+992:Filters:
+993:
+994:* Date Range
+995:* Technician
+996:* Department
+997:* Category
+998:* Priority
+999:* Location
+1000:* Status
+1001:* SLA Status
+1002:
+1003:Show:
+1004:
+1005:* Total Tickets
+1006:* Resolved Tickets
+1007:* Open Tickets
+1008:* Pending Tickets
+1009:* Average Resolution Time
+1010:* Average First Response Time
+1011:* SLA Compliance
+1012:* Tickets per Technician
+1013:* Tickets per Department
+1014:* Tickets per Location
+1015:* Most Common Problems
+1016:* Repeat Issues
+1017:
+1018:Charts:
+1019:
+1020:* Tickets Created vs Resolved
+1021:* Monthly Ticket Trend
+1022:* Category Breakdown
+1023:* Location Breakdown
+1024:* Priority Breakdown
+1025:* SLA Trend
+1026:* Resolution Time Trend
+1027:
+1028:Export options:
+1029:
+1030:* PDF
+1031:* Excel
+1032:* Print
+1033:
+1034:---
+1035:
+1036:# MANAGEMENT REPORT
+1037:
+1038:Create a Management Report generator.
+1039:
+1040:Date options:
+1041:
+1042:* Daily
+1043:* Weekly
+1044:* Monthly
+1045:* Yearly
+1046:* Custom Date Range
+1047:
+1048:Report sections:
+1049:
+1050:## Executive Summary
+1051:
+1052:Provide a short overview of IT operations.
+1053:
+1054:## Major Incidents
+1055:
+1056:Highlight significant events.
+1057:
+1058:## Critical Tickets
+1059:
+1060:Show current and resolved critical issues.
+1061:
+1062:## High Priority Tickets
+1063:
+1064:Show high-impact issues.
+1065:
+1066:## Resolved Issues
+1067:
+1068:Show important completed tickets.
+1069:
+1070:## Outstanding Issues
+1071:
+1072:Show unresolved tickets.
+1073:
+1074:## SLA Performance
+1075:
+1076:Show SLA compliance and breaches.
+1077:
+1078:## Recurring Issues
+1079:
+1080:Show repeated technical problems.
+1081:
+1082:## IT Workload
+1083:
+1084:Show technician workloads.
+1085:
+1086:## Location Summary
+1087:
+1088:Show IT health by location.
+1089:
+1090:## Recommendations
+1091:
+1092:Allow IT Admin / Team Lead to enter recommendations.
+1093:
+1094:Provide:
+1095:
+1096:* Export PDF
+1097:* Export Excel
+1098:* Print Report
+1099:
+1100:---
+1101:
+1102:# TECHNICIAN WORKLOAD
+1103:
+1104:Create technician cards.
+1105:
+1106:Show:
+1107:
+1108:* Technician Name
+1109:* Assigned Tickets
+1110:* Active Tickets
+1111:* Pending Tickets
+1112:* Resolved This Month
+1113:* Overdue Tickets
+1114:* Average Resolution Time
+1115:* SLA Compliance
+1116:
+1117:Do not rank technicians.
+1118:
+1119:The purpose is workload visibility and resource planning.
+1120:
+1121:---
+1122:
+1123:# RECURRING ISSUES
+1124:
+1125:Create a Recurring Issues page.
+1126:
+1127:Examples:
+1128:
+1129:* Internet connection failures
+1130:* Printer issues
+1131:* Computer hardware problems
+1132:* CCTV issues
+1133:* Software errors
+1134:* User account issues
+1135:* Server issues
+1136:
+1137:Show:
+1138:
+1139:* Issue Category
+1140:* Number of Occurrences
+1141:* Location
+1142:* Department
+1143:* Affected Asset
+1144:* Last Occurrence
+1145:* Current Status
+1146:
+1147:Allow clicking a recurring issue to see all related tickets.
+1148:
+1149:---
+1150:
+1151:# USER MANAGEMENT
+1152:
+1153:Create User Management page.
+1154:
+1155:Columns:
+1156:
+1157:* Name
+1158:* Email
+1159:* Department
+1160:* Position
+1161:* Role
+1162:* Location
+1163:* Status
+1164:
+1165:Available roles:
+1166:
+1167:* Employee
+1168:* IT Technician
+1169:* IT Admin / Team Lead
+1170:* Management
+1171:
+1172:Actions:
+1173:
+1174:* Add User
+1175:* Edit User
+1176:* Disable User
+1177:* Reset Access
+1178:* Change Role
+1179:
+1180:---
+1181:
+1182:# CATEGORY MANAGEMENT
+1183:
+1184:Create configurable categories.
+1185:
+1186:Examples:
+1187:
+1188:* Hardware
+1189:* Software
+1190:* Network
+1191:* Internet
+1192:* Printer
+1193:* CCTV
+1194:* Email
+1195:* User Account
+1196:* Server
+1197:* System
+1198:* Technical
+1199:* Other
+1200:
+1201:Allow IT Admin to create:
+1202:
+1203:* Category
+1204:* Subcategory
+1205:* Default Technician
+1206:* Default SLA
+1207:* Default Priority
+1208:
+1209:---
+1210:
+1211:# NOTIFICATION CENTER
+1212:
+1213:Create notification bell in top navigation.
+1214:
+1215:Notification examples:
+1216:
+1217:* New ticket submitted
+1218:* Ticket assigned to you
+1219:* Ticket reassigned
+1220:* Priority changed
+1221:* User replied
+1222:* Technician replied
+1223:* Ticket nearing SLA
+1224:* SLA breached
+1225:* Ticket escalated
+1226:* Approval requested
+1227:* Approval approved
+1228:* Approval rejected
+1229:* Ticket resolved
+1230:* Ticket reopened
+1231:
+1232:Notification settings should support:
+1233:
+1234:* In-System Notification
+1235:* Email Notification
+1236:
+1237:Design system structure so WhatsApp or other integrations could be added later.
+1238:
+1239:---
+1240:
+1241:# KNOWLEDGE BASE
+1242:
+1243:Create an internal Knowledge Base.
+1244:
+1245:Categories:
+1246:
+1247:* Networking
+1248:* Printers
+1249:* Windows
+1250:* Email
+1251:* Account Access
+1252:* Hardware
+1253:* Software
+1254:* CCTV
+1255:* Servers
+1256:* Common Troubleshooting
+1257:
+1258:Each article includes:
+1259:
+1260:* Title
+1261:* Category
+1262:* Problem
+1263:* Cause
+1264:* Solution
+1265:* Step-by-Step Instructions
+1266:* Attachments
+1267:* Related Articles
+1268:* Author
+1269:* Last Updated
+1270:
+1271:Provide search.
+1272:
+1273:When a user creates a ticket, suggest relevant Knowledge Base articles based on the Subject and Category.
+1274:
+1275:---
+1276:
+1277:# AUDIT LOG
+1278:
+1279:Create Audit Log for IT Admin.
+1280:
+1281:Record:
+1282:
+1283:* User
+1284:* Action
+1285:* Ticket
+1286:* Old Value
+1287:* New Value
+1288:* Date
+1289:* Time
+1290:* IP / Device where appropriate
+1291:
+1292:Examples:
+1293:
+1294:* Ticket Created
+1295:* Priority Changed
+1296:* Technician Assigned
+1297:* Status Changed
+1298:* Ticket Escalated
+1299:* Approval Requested
+1300:* Approval Approved
+1301:* Ticket Closed
+1302:* User Role Changed
+1303:
+1304:Audit records should not be editable.
+1305:
+1306:---
+1307:
+1308:# TICKET NUMBER FORMAT
+1309:
+1310:Automatically generate ticket numbers.
+1311:
+1312:Format:
+1313:
+1314:IT-YYYY-XXXX
+1315:
+1316:Examples:
+1317:
+1318:IT-2026-0001
+1319:
+1320:IT-2026-0002
+1321:
+1322:IT-2026-0003
+1323:
+1324:Automatically reset the running sequence each year.
+1325:
+1326:---
+1327:
+1328:# SEARCH
+1329:
+1330:Create global search.
+1331:
+1332:Allow searching:
+1333:
+1334:* Ticket ID
+1335:* Ticket Subject
+1336:* User
+1337:* Department
+1338:* Location
+1339:* Technician
+1340:* Asset ID
+1341:* Serial Number
+1342:* Category
+1343:
+1344:Display grouped search results.
+1345:
+1346:---
+1347:
+1348:# RESPONSIVE MOBILE DESIGN
+1349:
+1350:Make the entire system responsive.
+1351:
+1352:For mobile:
+1353:
+1354:* Convert sidebar into hamburger menu
+1355:* Convert large tables into ticket cards
+1356:* Keep Ticket ID visible
+1357:* Keep Priority visible
+1358:* Keep Status visible
+1359:* Keep Assigned Technician visible
+1360:* Keep SLA visible
+1361:* Use large touch-friendly buttons
+1362:
+1363:Add a floating:
+1364:
+1365:**+ Create Ticket**
+1366:
+1367:button for employees and authorized users.
+1368:
+1369:---
+1370:
+1371:# TABLET DESIGN
+1372:
+1373:Optimize tablet layout for IT technicians who may be working outside the office.
+1374:
+1375:Ticket Details should be easy to use while:
+1376:
+1377:* Troubleshooting equipment
+1378:* Working at another company location
+1379:* Taking photos
+1380:* Updating Findings
+1381:* Updating Action Taken
+1382:* Resolving tickets
+1383:
+1384:---
+1385:
+1386:# VISUAL DESIGN
+1387:
+1388:Use a modern enterprise IT dashboard style.
+1389:
+1390:Design should be:
+1391:
+1392:* Professional
+1393:* Clean
+1394:* Minimal
+1395:* Easy to understand
+1396:* Suitable for everyday operation
+1397:* Desktop-first
+1398:* Fully responsive
+1399:* Mobile-friendly
+1400:* Tablet-friendly
+1401:
+1402:Use:
+1403:
+1404:* Rounded cards
+1405:* Soft shadows
+1406:* Clear spacing
+1407:* Modern data tables
+1408:* Simple icons
+1409:* Consistent typography
+1410:* Status badges
+1411:* Priority badges
+1412:* Accessible contrast
+1413:
+1414:Use a professional blue and neutral color palette.
+1415:
+1416:---
+1417:
+1418:# PRIORITY COLORS
+1419:
+1420:Critical:
+1421:Red
+1422:
+1423:High:
+1424:Orange
+1425:
+1426:Medium:
+1427:Yellow
+1428:
+1429:Low:
+1430:Blue / Gray
+1431:
+1432:---
+1433:
+1434:# STATUS COLORS
+1435:
+1436:New:
+1437:Blue
+1438:
+1439:Assigned:
+1440:Purple
+1441:
+1442:In Progress:
+1443:Orange
+1444:
+1445:Pending:
+1446:Yellow
+1447:
+1448:Resolved:
+1449:Green
+1450:
+1451:Closed:
+1452:Gray
+1453:
+1454:Cancelled:
+1455:Dark Gray
+1456:
+1457:SLA Breached:
+1458:Red
+1459:
+1460:---
+1461:
+1462:# COMPONENT SYSTEM
+1463:
+1464:Create reusable Figma components using Auto Layout.
+1465:
+1466:Components:
+1467:
+1468:* Primary Button
+1469:* Secondary Button
+1470:* Danger Button
+1471:* Icon Button
+1472:* Input Field
+1473:* Text Area
+1474:* Dropdown
+1475:* Search Bar
+1476:* Date Picker
+1477:* Ticket Card
+1478:* Statistics Card
+1479:* Location Card
+1480:* Management Attention Card
+1481:* Asset Card
+1482:* Status Badge
+1483:* Priority Badge
+1484:* SLA Badge
+1485:* User Avatar
+1486:* Modal
+1487:* Confirmation Dialog
+1488:* Sidebar
+1489:* Top Navigation
+1490:* Tables
+1491:* Charts
+1492:* Notification Item
+1493:* Pagination
+1494:* Tabs
+1495:* Activity Timeline
+1496:* Comments
+1497:* Internal Notes
+1498:* Management Comments
+1499:
+1500:Create component variants for:
+1501:
+1502:* Default
+1503:* Hover
+1504:* Active
+1505:* Disabled
+1506:* Error
+1507:* Selected
+1508:
+1509:---
+1510:
+1511:# PROTOTYPE INTERACTIONS
+1512:
+1513:Create clickable prototype flows.
+1514:
+1515:## Employee Flow
+1516:
+1517:Login
+1518:
+1519:→ Employee Dashboard
+1520:
+1521:→ Create Ticket
+1522:
+1523:→ Fill Form
+1524:
+1525:→ Submit
+1526:
+1527:→ Ticket Created Confirmation
+1528:
+1529:→ Ticket Details
+1530:
+1531:→ Add Reply
+1532:
+1533:→ Confirm Resolution
+1534:
+1535:---
+1536:
+1537:## Technician Flow
+1538:
+1539:Login
+1540:
+1541:→ Technician Dashboard
+1542:
+1543:→ Assigned Ticket
+1544:
+1545:→ Ticket Details
+1546:
+1547:→ Start Work
+1548:
+1549:→ Add Findings
+1550:
+1551:→ Add Action Taken
+1552:
+1553:→ Add Result
+1554:
+1555:→ Update Status
+1556:
+1557:→ Resolve Ticket
+1558:
+1559:---
+1560:
+1561:## IT Admin Flow
+1562:
+1563:Login
+1564:
+1565:→ Admin Dashboard
+1566:
+1567:→ Unassigned Ticket
+1568:
+1569:→ Assign Technician
+1570:
+1571:→ Monitor SLA
+1572:
+1573:→ Escalate Ticket
+1574:
+1575:→ Review IT Report
+1576:
+1577:→ Close Ticket
+1578:
+1579:---
+1580:
+1581:## Management Flow
+1582:
+1583:Login
+1584:
+1585:→ Management Dashboard
+1586:
+1587:→ Management Attention Required
+1588:
+1589:→ Open Critical Ticket
+1590:
+1591:→ View Latest Update
+1592:
+1593:→ Add Management Comment
+1594:
+1595:→ Review Approval Request
+1596:
+1597:→ Approve / Reject
+1598:
+1599:→ Return to Dashboard
+1600:
+1601:---
+1602:
+1603:# MANAGEMENT TICKET VIEW
+1604:
+1605:When Management opens a ticket, create a simplified read-only interface.
+1606:
+1607:Show:
+1608:
+1609:* Ticket ID
+1610:* Subject
+1611:* Description
+1612:* Requester
+1613:* Department
+1614:* Location
+1615:* Category
+1616:* Priority
+1617:* Business Impact
+1618:* Status
+1619:* Assigned Technician
+1620:* Created Date
+1621:* Ticket Age
+1622:* SLA Status
+1623:* Latest Update
+1624:* Findings
+1625:* Action Taken
+1626:* Current Result
+1627:* Recommendation
+1628:* Approval Information
+1629:* Management Comments
+1630:
+1631:Do not show unnecessary technical administration controls.
+1632:
+1633:---
+1634:
+1635:# DASHBOARD DESIGN PRINCIPLE
+1636:
+1637:Different users should see different information.
+1638:
+1639:Employee:
+1640:"What is happening with my ticket?"
+1641:
+1642:Technician:
+1643:"What do I need to work on?"
+1644:
+1645:IT Admin / Team Lead:
+1646:"What is happening across the entire IT operation?"
+1647:
+1648:Management:
+1649:"Is there anything affecting operations, overdue, critical, requiring approval, or requiring my attention?"
+1650:
+1651:Design each dashboard around these questions.
+1652:
+1653:---
+1654:
+1655:# FINAL DESIGN REQUIREMENTS
+1656:
+1657:Do not create only a homepage or mock dashboard.
+1658:
+1659:Create a complete application design covering:
+1660:
+1661:1. Login
+1662:2. Employee Dashboard
+1663:3. Technician Dashboard
+1664:4. IT Admin Dashboard
+1665:5. Management Dashboard
+1666:6. Create Ticket
+1667:7. Ticket List
+1668:8. Kanban Board
+1669:9. Ticket Details
+1670:10. IT Troubleshooting Workspace
+1671:11. Management Ticket View
+1672:12. Asset Management
+1673:13. Asset Details
+1674:14. Reports
+1675:15. Management Reports
+1676:16. User Management
+1677:17. Category Management
+1678:18. Location Overview
+1679:19. Knowledge Base
+1680:20. Notifications
+1681:21. Audit Log
+1682:22. Approval Workflow
+1683:23. Settings
+1684:
+1685:Use consistent components, Auto Layout, design tokens, responsive layouts, and reusable variants throughout the entire project.
+1686:
+1687:Make the UI look like a real internal enterprise IT Helpdesk application that could later be developed into a functional web application.
+
+(End of file — 1687 lines.)

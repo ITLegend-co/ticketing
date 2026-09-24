@@ -1,0 +1,14 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "users": {
+      ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'IT Admin'",
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('role').val() === 'IT Admin')",
+        ".write": "auth != null && ((auth.uid === $uid && !data.exists() && !root.child('users').exists() && newData.child('role').val() === 'IT Admin') || root.child('users').child(auth.uid).child('role').val() === 'IT Admin' || (auth.uid === $uid && data.exists() && newData.child('role').val() === data.child('role').val() && newData.child('email').val() === data.child('email').val()))",
+        ".validate": "newData.hasChildren(['name', 'email', 'role', 'department', 'status']) && (newData.child('role').val() === 'Employee' || newData.child('role').val() === 'IT Technician' || newData.child('role').val() === 'IT Admin' || newData.child('role').val() === 'Management')"
+      }
+    }
+  }
+}
