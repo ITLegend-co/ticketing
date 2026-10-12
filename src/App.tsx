@@ -1,8 +1,8 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { User as FirebaseUser } from "firebase/auth";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, updatePassword } from "firebase/auth";
 import { equalTo, onValue, orderByChild, push, query, ref, set, update } from "firebase/database";
-import { auth, database, sendUserPasswordReset } from "./firebase";
+import { auth, database, generateTemporaryPassword, provisionUser, sendUserPasswordReset } from "./firebase";
 import { Check, ChevronDown, CircleAlert, Clock3, Filter, Headphones, LayoutDashboard, LogOut, Menu, Plus, Search, ShieldCheck, Ticket, UserPlus, Users, X } from "lucide-react";
 
 type Role = "Employee" | "IT Technician" | "IT Admin" | "Management";
@@ -25,7 +25,11 @@ const issueMessage = (error: unknown) => {
   const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
   if (code.includes("invalid-credential")) return "The email or password is incorrect.";
   if (code.includes("permission-denied")) return "Database permissions rejected this action. Ask the administrator to check the database rules.";
-  if (code.includes("email-already-in-use")) return "An account already exists for this email.";
+  if (code.includes("email-already-in-use")) return "An account already exists for this email. Use Link existing account if it needs a helpdesk profile.";
+  if (code.includes("invalid-email")) return "Enter a valid work email address.";
+  if (code.includes("weak-password") || code.includes("password-does-not-meet-requirements")) return "The temporary password does not meet the password requirements. Use a longer password with upper and lowercase letters, numbers, and a symbol.";
+  if (code.includes("too-many-requests")) return "Too many attempts. Wait a moment before trying again.";
+  if (code.includes("network-request-failed")) return "Check your internet connection and try again.";
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
 };
 
@@ -74,6 +78,12 @@ export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
+  const [userMode, setUserMode] = useState<"create" | "link">("create");
+  const [userError, setUserError] = useState("");
+  const [userBusy, setUserBusy] = useState(false);
+  const userSubmitting = useRef(false);
+  const [credentials, setCredentials] = useState<{ email: string; password: string } | null>(null);
+  const [copyFeedback, setCopyFeedback] = useState("");
   const [selected, setSelected] = useState<TicketItem | null>(null);
   const [search, setSearch] = useState("");
   const [priority, setPriority] = useState("All priorities");
@@ -84,6 +94,7 @@ export default function App() {
 
   useEffect(() => onAuthStateChanged(auth, (next) => {
     setUser(next); setProfile(null); setProfileLoading(!!next); setAuthLoading(false);
+    setCredentials(null); setUserOpen(false); setUserError("");
   }), []);
   useEffect(() => {
     if (!user) return;
@@ -158,21 +169,31 @@ export default function App() {
   }
   async function createUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (profile?.role !== "IT Admin" || busy) return;
+    if (profile?.role !== "IT Admin" || userSubmitting.current) return;
     const data = new FormData(event.currentTarget);
-    const email = String(data.get("email")).trim();
-    const uid = String(data.get("uid")).trim();
-    if (users.some((person) => person.id === uid)) { notify("A helpdesk profile already exists for that UID."); return; }
-    setBusy(true);
+    const email = String(data.get("email")).trim().toLowerCase();
+    const input = {
+      name: String(data.get("name")).trim(), email, role: String(data.get("role")) as Role,
+      department: String(data.get("department")).trim(),
+    };
+    setUserError("");
+    userSubmitting.current = true;
+    setUserBusy(true);
     try {
-      await set(ref(database, `users/${uid}`), {
-        name: String(data.get("name")).trim(), email, role: String(data.get("role")) as Role,
-        department: String(data.get("department")).trim(), status: "Active", mustChangePassword: false,
-        createdAt: Date.now()
-      });
-      setUserOpen(false); notify("Helpdesk profile linked to the Firebase account.");
-    } catch (error) { notify(issueMessage(error)); }
-    finally { setBusy(false); }
+      if (!input.name || !input.department) throw new Error("Enter a name and department.");
+      if (userMode === "link") {
+        const uid = String(data.get("uid")).trim();
+        if (!uid || [...uid].some((character) => ".#$[]/".includes(character))) throw new Error("Paste a valid Firebase User UID.");
+        if (users.some((person) => person.id === uid || person.email.toLowerCase() === email)) throw new Error("A helpdesk profile already exists for this account.");
+        await set(ref(database, `users/${uid}`), { ...input, status: "Active", mustChangePassword: false, createdAt: Date.now() });
+        setUserOpen(false); notify("Helpdesk profile linked to the Firebase account.");
+      } else {
+        const password = String(data.get("password") || "") || generateTemporaryPassword();
+        await provisionUser(input, password);
+        setUserOpen(false); setCopyFeedback(""); setCredentials({ email, password }); notify("User account created.");
+      }
+    } catch (error) { setUserError(issueMessage(error)); }
+    finally { userSubmitting.current = false; setUserBusy(false); }
   }
   async function changeRole(person: Profile, role: Role) {
     if (person.id === user?.uid || profile?.role !== "IT Admin") return;
@@ -207,7 +228,7 @@ export default function App() {
     <main className="main"><header className="topbar"><button className="icon-btn menu-btn" aria-label="Open menu" onClick={() => setMenuOpen(true)}><Menu size={21}/></button><span className="header-title">Nexus IT Helpdesk</span><span className="header-account">{profile.email}</span></header>
       <div className="content">
         <div className="page-heading"><div><h1>{page === "Dashboard" ? `Welcome, ${profile.name.split(" ")[0]}` : page}</h1><p>{page === "Dashboard" ? "Your helpdesk at a glance." : page === "Tickets" ? "Track and manage support requests." : "Manage helpdesk accounts."}</p></div>
-          <button className="primary-btn" onClick={() => page === "Users" ? setUserOpen(true) : setCreateOpen(true)}>{page === "Users" ? <UserPlus size={17}/> : <Plus size={17}/>} {page === "Users" ? "Link account" : "Create ticket"}</button>
+          <button className="primary-btn" onClick={() => { if (page === "Users") { setUserMode("create"); setUserError(""); setUserOpen(true); } else setCreateOpen(true); }}>{page === "Users" ? <UserPlus size={17}/> : <Plus size={17}/>} {page === "Users" ? "Create user" : "Create ticket"}</button>
         </div>
         {loadError && <div className="auth-message error workspace-error"><CircleAlert size={17}/>{loadError}</div>}
         {page === "Dashboard" && <>
@@ -226,7 +247,7 @@ export default function App() {
           </div>
           {ticketsLoading ? <div className="empty-state">Loading tickets…</div> : !visibleTickets.length ? <div className="empty-state"><strong>{tickets.length ? "No matching tickets" : "No tickets yet"}</strong><p>{tickets.length ? "Try changing your search or filters." : "Create the first ticket to get started."}</p></div> : <div className="table-scroll"><table><thead><tr><th>Ticket</th><th>Requester</th><th>Priority</th><th>Status</th><th>Assigned to</th><th>Created</th></tr></thead><tbody>{visibleTickets.map((item) => <tr key={item.id} onClick={() => setSelected(item)}><td><button className="ticket-name"><strong>{item.subject}</strong><span>#{item.id.slice(-7)} · {item.category}</span></button></td><td>{item.requester}</td><td><span className={`badge ${item.priority.toLowerCase()}`}>{item.priority}</span></td><td><span className={`status ${item.status.toLowerCase().replace(/ /g, "-")}`}>{item.status}</span></td><td>{item.technician || "Unassigned"}</td><td>{displayDate(item.createdAt)}</td></tr>)}</tbody></table></div>}
         </section>}
-        {page === "Users" && profile.role === "IT Admin" && <section className="panel users-panel"><div className="panel-heading users-heading"><div><h2>User directory</h2><p>{users.length} registered profile{users.length === 1 ? "" : "s"}</p></div></div><div className="table-scroll"><table className="users-table"><thead><tr><th>User</th><th>Role</th><th>Department</th><th>Status</th><th>Security</th></tr></thead><tbody>{users.map((person) => <tr key={person.id}><td><div className="person user-person"><div className="mini-avatar">{initials(person.name)}</div><div><strong>{person.name}</strong><span>{person.email}</span></div></div></td><td><select value={person.role} onChange={(e) => changeRole(person, e.target.value as Role)} disabled={person.id === user.uid} aria-label={`Role for ${person.name}`}><option>Employee</option><option>IT Technician</option><option>IT Admin</option><option>Management</option></select></td><td>{person.department}</td><td>{person.status}</td><td><button className="reset-btn" onClick={async () => { try { await sendUserPasswordReset(person.email); notify("Password reset email sent."); } catch (error) { notify(issueMessage(error)); } }}>Send reset email</button></td></tr>)}</tbody></table>{!users.length && <div className="empty-state">No user profiles found.</div>}</div></section>}
+        {page === "Users" && profile.role === "IT Admin" && <section className="panel users-panel"><div className="panel-heading users-heading"><div><h2>User directory</h2><p>{users.length} registered profile{users.length === 1 ? "" : "s"}</p></div><button className="text-btn" onClick={() => { setUserMode("link"); setUserError(""); setUserOpen(true); }}>Link existing account</button></div><div className="table-scroll"><table className="users-table"><thead><tr><th>User</th><th>Role</th><th>Department</th><th>Status</th><th>Security</th></tr></thead><tbody>{users.map((person) => <tr key={person.id}><td><div className="person user-person"><div className="mini-avatar">{initials(person.name)}</div><div><strong>{person.name}</strong><span>{person.email}</span></div></div></td><td><select value={person.role} onChange={(e) => changeRole(person, e.target.value as Role)} disabled={person.id === user.uid} aria-label={`Role for ${person.name}`}><option>Employee</option><option>IT Technician</option><option>IT Admin</option><option>Management</option></select></td><td>{person.department}</td><td>{person.status}</td><td><button className="reset-btn" onClick={async () => { try { await sendUserPasswordReset(person.email); notify("Password reset email sent."); } catch (error) { notify(issueMessage(error)); } }}>Send reset email</button></td></tr>)}</tbody></table>{!users.length && <div className="empty-state">No user profiles found.</div>}</div></section>}
       </div>
     </main>
     {createOpen && <div className="modal-layer" role="dialog" aria-modal="true" aria-label="Create ticket"><button className="modal-backdrop" onClick={() => setCreateOpen(false)}/><form className="ticket-modal" onSubmit={createTicket}><div className="modal-heading"><div><h2>Create ticket</h2><p>Describe the issue so the IT team can help.</p></div><button type="button" className="icon-btn" onClick={() => setCreateOpen(false)}><X size={20}/></button></div><div className="form-body">
@@ -235,9 +256,31 @@ export default function App() {
       <label>Priority<select name="priority" defaultValue="Medium">{priorities.map((p) => <option key={p}>{p}</option>)}</select></label>
       <label>Location<input name="location" placeholder="e.g. KK Office" required/></label><label>Business impact<select name="impact" defaultValue="Single User"><option>Single User</option><option>Multiple Users</option><option>Department</option><option>Entire Company</option></select></label>
     </div><div className="modal-actions"><button type="button" className="secondary-btn" onClick={() => setCreateOpen(false)}>Cancel</button><button className="primary-btn" disabled={busy}>Submit ticket</button></div></form></div>}
-    {userOpen && <div className="modal-layer" role="dialog" aria-modal="true" aria-label="Link Firebase account"><button className="modal-backdrop" onClick={() => setUserOpen(false)}/><form className="ticket-modal" onSubmit={createUser}><div className="modal-heading"><div><h2>Link Firebase account</h2><p>First add the account in Firebase Authentication, then copy its User UID here.</p></div><button type="button" className="icon-btn" onClick={() => setUserOpen(false)}><X size={20}/></button></div><div className="form-body">
-      <label className="full">Firebase User UID<input name="uid" required autoFocus placeholder="Paste the UID from Firebase Authentication"/></label><label>Full name<input name="name" required/></label><label>Work email<input name="email" type="email" required/></label><label>Role<select name="role">{(["Employee", "IT Technician", "IT Admin", "Management"] as Role[]).map((r) => <option key={r}>{r}</option>)}</select></label><label>Department<input name="department" required/></label>
-    </div><div className="modal-actions"><button type="button" className="secondary-btn" onClick={() => setUserOpen(false)}>Cancel</button><button className="primary-btn" disabled={busy}>Link account</button></div></form></div>}
+    {userOpen && profile.role === "IT Admin" && <div className="modal-layer" role="dialog" aria-modal="true" aria-label={userMode === "create" ? "Create user" : "Link existing account"}>
+      <button className="modal-backdrop" aria-label="Close user form" disabled={userBusy} onClick={() => setUserOpen(false)}/>
+      <form className="ticket-modal" onSubmit={createUser}>
+        <div className="modal-heading"><div><h2>{userMode === "create" ? "Create user" : "Link existing account"}</h2><p>{userMode === "create" ? "Create a login and assign helpdesk access." : "Add a helpdesk profile for an account already in Firebase Authentication."}</p></div><button type="button" className="icon-btn" aria-label="Close user form" disabled={userBusy} onClick={() => setUserOpen(false)}><X size={20}/></button></div>
+        <fieldset className="form-body user-form-fields" disabled={userBusy}>
+          {userMode === "link" && <label className="full">Firebase User UID<input name="uid" required autoFocus placeholder="Paste the UID from Firebase Authentication"/></label>}
+          <label>Full name<input name="name" required autoFocus={userMode === "create"} maxLength={120} autoComplete="off"/></label>
+          <label>Work email<input name="email" type="email" required autoComplete="off"/></label>
+          <label>Role<select name="role" defaultValue="Employee">{(["Employee", "IT Technician", "IT Admin", "Management"] as Role[]).map((role) => <option key={role}>{role}</option>)}</select></label>
+          <label>Department<input name="department" required maxLength={120} placeholder="e.g. Operations"/></label>
+          {userMode === "create" && <label className="full">Temporary password<input name="password" type="password" minLength={8} autoComplete="new-password" placeholder="Leave blank to generate a password"/><small>At least 8 characters. The user will be asked to choose a new password on first sign-in.</small></label>}
+          {userError && <div className="auth-message error full user-form-message" role="alert"><CircleAlert size={16}/>{userError}</div>}
+        </fieldset>
+        <div className="modal-actions"><button type="button" className="secondary-btn" disabled={userBusy} onClick={() => setUserOpen(false)}>Cancel</button><button className="primary-btn" disabled={userBusy}>{userBusy ? "Saving…" : userMode === "create" ? "Create user" : "Link account"}</button></div>
+      </form>
+    </div>}
+    {credentials && profile.role === "IT Admin" && <div className="modal-layer" role="dialog" aria-modal="true" aria-label="User account created">
+      <div className="modal-backdrop"/>
+      <div className="ticket-modal credential-modal">
+        <div className="credential-icon"><Check size={23}/></div><h2>User account created</h2><p>{credentials.email} can now sign in. Share the temporary password through a secure channel.</p>
+        <div className="credential-field"><div><span>Temporary password</span><strong>{credentials.password}</strong></div><button type="button" onClick={async () => { try { await navigator.clipboard.writeText(credentials.password); setCopyFeedback("Password copied."); } catch { setCopyFeedback("Copy unavailable. Select and copy the password manually."); } }}>Copy</button></div>
+        <p className="credential-warning">This password is shown only here. Copy it before closing.</p><p role="status">{copyFeedback}</p>
+        <div className="credential-actions"><button className="primary-btn" onClick={() => setCredentials(null)}>Done</button></div>
+      </div>
+    </div>}
     {profile.mustChangePassword && <div className="modal-layer" role="dialog" aria-modal="true" aria-label="Change temporary password"><div className="modal-backdrop"/><form className="ticket-modal credential-modal password-change" onSubmit={changePassword}><div className="credential-icon"><ShieldCheck size={23}/></div><h2>Choose a new password</h2><p>Your temporary password must be changed before continuing.</p><label>New password<input name="newPassword" type="password" minLength={8} required autoFocus/></label><button className="primary-btn">Update password</button></form></div>}
     {selectedLive && <div className="drawer-layer"><button className="drawer-backdrop" onClick={() => setSelected(null)}/><aside className="ticket-drawer"><div className="drawer-head"><span>Ticket #{selectedLive.id.slice(-7)}</span><button className="icon-btn" onClick={() => setSelected(null)}><X size={20}/></button></div><div className="drawer-body"><h2>{selectedLive.subject}</h2><p className="ticket-description">{selectedLive.description}</p><div className="detail-grid"><div><span>Requester</span><strong>{selectedLive.requester}</strong></div><div><span>Created</span><strong>{displayDate(selectedLive.createdAt)}</strong></div><div><span>Department</span><strong>{selectedLive.department}</strong></div><div><span>Location</span><strong>{selectedLive.location}</strong></div><div><span>Category</span><strong>{selectedLive.category}</strong></div><div><span>Priority</span><strong>{selectedLive.priority}</strong></div><div><span>Business impact</span><strong>{selectedLive.impact}</strong></div></div>
       <div className="ticket-controls"><label>Status<select value={selectedLive.status} disabled={!canWorkTickets(profile.role)} onChange={(e) => changeTicket({ status: e.target.value as Status })}>{statuses.map((s) => <option key={s}>{s}</option>)}</select></label><label>Assigned to<select value={selectedLive.technicianId || ""} disabled={!canWorkTickets(profile.role) || profile.role !== "IT Admin"} onChange={(e) => { const person = technicians.find((item) => item.id === e.target.value); changeTicket({ technicianId: person?.id || "", technician: person?.name || "" }); }}><option value="">Unassigned</option>{technicians.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label></div>

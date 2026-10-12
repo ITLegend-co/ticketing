@@ -208,6 +208,13 @@ tbody tr { transition: background .15s; cursor: pointer; } tbody tr:hover { back
 .credential-field div { display: flex; flex-direction: column; gap: 5px; }
 .credential-field span { color: #969eac; font-size: 8px; text-transform: uppercase; letter-spacing: .4px; }
 .credential-field strong { color: #27334a; font-size: 13px; letter-spacing: .5px; }
+.credential-field div { min-width: 0; }
+.credential-field strong { overflow-wrap: anywhere; user-select: text; }
+.credential-field button { flex-shrink: 0; margin-left: 12px; }
+.user-form-fields { border: 0; margin: 0; min-width: 0; }
+.user-form-fields small { color: #798499; line-height: 1.5; font-weight: 400; }
+.user-form-message { font-size: 12px; }
+.credential-warning { font-size: 12px; color: #68748a; }
 .credential-field button { border: 0; color: #2759c8; background: #e7edfa; padding: 6px 9px; border-radius: 5px; font-size: 8px; font-weight: 700; }
 .credential-email { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 12px 0; color: #68748a; font-size: 9px; }
 .security-note { display: flex; align-items: flex-start; gap: 8px; padding: 10px; border-radius: 7px; text-align: left; color: #a36b28; background: #fff7eb; font-size: 8px; line-height: 1.5; }
