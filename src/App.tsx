@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { User as FirebaseUser } from "firebase/auth";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, updatePassword } from "firebase/auth";
 import { equalTo, onValue, orderByChild, push, query, ref, set, update } from "firebase/database";
+import DriveAttachments from "./DriveAttachments";
 import { canUpdateTicket, isOperatorPath, isStaffRole, portalLink } from "./portal";
 import { auth, database, generateTemporaryPassword, provisionUser, sendUserPasswordReset } from "./firebase";
 import { Check, ChevronDown, CircleAlert, Clock3, Filter, Headphones, LayoutDashboard, LogOut, Menu, Plus, Search, ShieldCheck, Ticket, UserPlus, Users, X } from "lucide-react";
@@ -145,13 +146,15 @@ export default function App() {
     setBusy(true);
     try {
       const ticketRef = push(ref(database, "tickets"));
-      await set(ticketRef, {
+      const newTicket: Omit<TicketItem, "id"> = {
         subject: String(data.get("subject")).trim(), description: String(data.get("description")).trim(),
         category: String(data.get("category")), priority: "Unreviewed", reviewedAt: 0, reviewedBy: "",
         location: String(data.get("location")).trim(), impact: String(data.get("impact")),
         status: "Open", requesterId: user.uid, requester: profile.name, department: profile.department,
         technicianId: "", technician: "", createdAt: Date.now(), updatedAt: Date.now(),
-      });
+      };
+      await set(ticketRef, newTicket);
+      setSelected({ ...newTicket, id: ticketRef.key! });
       setCreateOpen(false); setPage("Tickets"); notify("Request submitted for IT Admin review.");
     } catch (error) { notify(issueMessage(error)); }
     finally { setBusy(false); }
@@ -317,6 +320,7 @@ export default function App() {
         <button className="primary-btn" disabled={busy}>{busy ? "Saving…" : "Save review and assignment"}</button>
       </form>}
       <div className="ticket-controls"><label>Status<select value={selectedLive.status} disabled={!operatorPortal || !canUpdateTicket(profile.role, user.uid, selectedLive)} onChange={(e) => changeTicket({ status: e.target.value as Status })}>{statuses.map((status) => <option key={status}>{status}</option>)}</select></label></div>
+      <DriveAttachments key={selectedLive.id} ticketId={selectedLive.id} canUpload={selectedLive.requesterId === user.uid || profile.role === "IT Admin" || (operatorPortal && canUpdateTicket(profile.role, user.uid, selectedLive))}/>
       <h3>Updates</h3>{Object.entries(selectedLive.updates || {}).sort((a,b) => a[1].createdAt - b[1].createdAt).map(([id, note]) => <div className="ticket-note" key={id}><p>{note.text}</p><small>{note.author} · {displayDate(note.createdAt)}</small></div>)}{!selectedLive.updates && <p className="muted-cell">No updates yet.</p>}
       {operatorPortal && canUpdateTicket(profile.role, user.uid, selectedLive) && <form className="ticket-note-form" onSubmit={addNote}><label>Update<textarea name="note" rows={3} required placeholder="Add a progress update"/></label><button className="primary-btn">Add note</button></form>}
       </div></aside></div>}

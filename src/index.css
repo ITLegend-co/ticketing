@@ -307,3 +307,12 @@ tbody tr { transition: background .15s; cursor: pointer; } tbody tr:hover { back
 .brand strong { font-size: 14px; }
 .header-title { max-width: 70%; }
 @media (max-width: 700px) { .header-title { font-size: 12px; } }
+.request-photos { margin: 24px 0; padding: 16px; border: 1px solid #e2e8f0; border-radius: 8px; }
+.request-photos p, .request-photos small { color: #7c899b; font-size: 12px; line-height: 1.5; }
+.request-photos ul { list-style: none; padding: 0; }
+.request-photos li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; }
+.photo-upload { display: grid; gap: 8px; color: #384964; font-size: 12px; font-weight: 600; }
+.photo-upload input { max-width: 100%; }
+.request-photos .photo-error { color: #b64049; }
+.photo-preview { display: grid; gap: 12px; margin-top: 15px; }
+.photo-preview img { max-width: 100%; max-height: 400px; object-fit: contain; border-radius: 8px; }
