@@ -295,3 +295,15 @@ tbody tr { transition: background .15s; cursor: pointer; } tbody tr:hover { back
 .ticket-note-form { display: grid; gap: 10px; margin-top: 18px; }
 .ticket-note-form .primary-btn { justify-self: start; }
 @media (max-width: 700px) { .header-account { display: none; } .ticket-controls { grid-template-columns: 1fr; } }
+
+.request-review-info { padding: 13px; border-radius: 8px; background: #f0f5ff; color: #3b5684; font-size: 12px; line-height: 1.6; margin: 15px 0; }
+.admin-review-form { padding: 15px; border: 1px solid #dde6f4; border-radius: 9px; display: grid; gap: 13px; margin-top: 18px; }
+.admin-review-form h3 { margin: 0; }
+.admin-review-form label { display: grid; gap: 7px; font-size: 12px; color: #53617a; }
+.admin-review-form select { min-height: 38px; padding: 8px; border: 1px solid #dbe2ec; border-radius: 6px; background: #fff; }
+.badge.unreviewed { background: #eef2f7; color: #67758a; white-space: nowrap; }
+.login-link-field { margin-top: 12px; }
+.login-link-field strong { font-size: 11px; }
+.brand strong { font-size: 14px; }
+.header-title { max-width: 70%; }
+@media (max-width: 700px) { .header-title { font-size: 12px; } }

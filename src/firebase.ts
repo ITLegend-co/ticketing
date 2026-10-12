@@ -35,7 +35,7 @@ export type UserProfileInput = {
 export function generateTemporaryPassword() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
   const random = crypto.getRandomValues(new Uint8Array(20));
-  return `Nexus-7${Array.from(random, (value) => alphabet[value % alphabet.length]).join("")}!`;
+  return `MT-7${Array.from(random, (value) => alphabet[value % alphabet.length]).join("")}!`;
 }
 
 // The new account signs in only to a temporary, memory-only Auth instance.

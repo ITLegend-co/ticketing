@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node --experimental-strip-types scripts/create-operator-entry.mjs",
     "preview": "vite preview",
     "format": "oxfmt",
     "test": "node --experimental-strip-types --experimental-test-module-mocks --test tests/*.test.mjs"

@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
 
-const siteConfiguration = { title: 'Nexus IT Helpdesk' }
+const siteConfiguration = { title: 'Mountain Torq IT Helpdesk' }
 
 
 // Vite config — https://vitejs.dev/config/
