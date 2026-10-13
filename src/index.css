@@ -322,3 +322,16 @@ tbody tr { transition: background .15s; cursor: pointer; } tbody tr:hover { back
 .delete-ticket-copy { padding: 20px; font-size: 13px; line-height: 1.6; color: #4b566b; }
 .delete-ticket-copy strong { color: #243147; }
 .delete-ticket-copy .auth-message { font-size: 12px; }
+
+fieldset.form-body { margin: 0; min-width: 0; border: 0; }
+.form-body > .full { grid-column: 1 / -1; }
+.ticket-photo-picker { padding: 14px; background: #f8faff; border: 1px solid #e2e8f0; border-radius: 8px; }
+.ticket-photo-picker small { font-size: 11px; font-weight: 400; color: #758198; }
+.selected-photos { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 9px; }
+.selected-photos li { display: flex; align-items: center; gap: 10px; }
+.selected-photos img { width: 48px; height: 48px; object-fit: cover; border-radius: 6px; }
+.selected-photos li > span { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 12px; color: #344157; }
+.selected-photos small { display: block; margin-top: 4px; }
+.ticket-photo-picker .photo-error { font-size: 12px; color: #b64049; }
+.submission-progress { font-size: 12px; color: #3b5684; }
+.attachment-warning { font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }

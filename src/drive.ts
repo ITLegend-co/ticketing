@@ -2,8 +2,8 @@ import { auth } from './firebase';
 import config from './drive-config.json';
 export type DrivePhoto = { id: string; name: string; mime: string; size: number; createdAt: number };
 export const driveReady = !!config.webAppUrl;
-export const MAX_PHOTOS = 5;
-export const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+import { validatePhotos } from './ticket-submission';
+export { MAX_PHOTOS, MAX_PHOTO_BYTES } from './ticket-submission';
 
 export async function driveRequest<T>(ticketId: string, action: string, extra: object = {}): Promise<T> {
   if (!driveReady) throw new Error('Photo uploads are currently unavailable.');
@@ -22,8 +22,7 @@ export async function driveRequest<T>(ticketId: string, action: string, extra: o
 }
 
 export async function uploadPhoto(ticketId: string, file: File) {
-  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) throw new Error('Choose a JPG, PNG, or WebP photo.');
-  if (!file.size || file.size > MAX_PHOTO_BYTES) throw new Error('Each photo must be 5 MB or smaller.');
+  validatePhotos([file]);
   const base64 = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result).split(',')[1]);

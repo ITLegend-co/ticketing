@@ -3,6 +3,9 @@ import type { User as FirebaseUser } from "firebase/auth";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, updatePassword } from "firebase/auth";
 import { equalTo, onValue, orderByChild, push, query, ref, remove, set, update } from "firebase/database";
 import DriveAttachments from "./DriveAttachments";
+import TicketPhotoPicker from "./TicketPhotoPicker";
+import { driveReady, uploadPhoto } from "./drive";
+import { submitWithPhotos } from "./ticket-submission";
 import { canUpdateTicket, isOperatorPath, isStaffRole, portalLink } from "./portal";
 import { auth, database, generateTemporaryPassword, provisionUser, sendUserPasswordReset } from "./firebase";
 import { Check, ChevronDown, CircleAlert, Clock3, Filter, Headphones, LayoutDashboard, LogOut, Menu, Plus, Search, ShieldCheck, Ticket, UserPlus, Users, X } from "lucide-react";
@@ -81,6 +84,15 @@ export default function App() {
   const [page, setPage] = useState<"Dashboard" | "Tickets" | "Users">(operatorPortal ? "Dashboard" : "Tickets");
   const [menuOpen, setMenuOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [ticketPhotos, setTicketPhotos] = useState<File[]>([]);
+  const [createError, setCreateError] = useState("");
+  const [submitProgress, setSubmitProgress] = useState("");
+  const [photoWarning, setPhotoWarning] = useState<{ id: string; message: string } | null>(null);
+  const ticketSubmitting = useRef(false);
+  function closeCreate() {
+    if (ticketSubmitting.current) return;
+    setCreateOpen(false); setTicketPhotos([]); setCreateError("");
+  }
   const [userOpen, setUserOpen] = useState(false);
   const [userMode, setUserMode] = useState<"create" | "link">("create");
   const [userError, setUserError] = useState("");
@@ -104,6 +116,7 @@ export default function App() {
     setUser(next); setProfile(null); setProfileLoading(!!next); setAuthLoading(false);
     setCredentials(null); setUserOpen(false); setUserError("");
     setDeleteTarget(null); setDeleteError("");
+    setCreateOpen(false); setTicketPhotos([]); setCreateError(""); setPhotoWarning(null);
   }), []);
   useEffect(() => {
     if (!user) return;
@@ -146,9 +159,10 @@ export default function App() {
 
   async function createTicket(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!user || !profile || busy) return;
+    if (!user || !profile || busy || ticketSubmitting.current) return;
     const data = new FormData(event.currentTarget);
-    setBusy(true);
+    ticketSubmitting.current = true;
+    setBusy(true); setCreateError(""); setSubmitProgress("Submitting request…");
     try {
       const ticketRef = push(ref(database, "tickets"));
       const newTicket: Omit<TicketItem, "id"> = {
@@ -158,11 +172,18 @@ export default function App() {
         status: "Open", requesterId: user.uid, requester: profile.name, department: profile.department,
         technicianId: "", technician: "", createdAt: Date.now(), updatedAt: Date.now(),
       };
-      await set(ticketRef, newTicket);
-      setSelected({ ...newTicket, id: ticketRef.key! });
-      setCreateOpen(false); setPage("Tickets"); notify("Request submitted for IT Admin review.");
-    } catch (error) { notify(issueMessage(error)); }
-    finally { setBusy(false); }
+      const result = await submitWithPhotos(ticketPhotos, async () => {
+        await set(ticketRef, newTicket);
+        return { ...newTicket, id: ticketRef.key! };
+      }, uploadPhoto, (index, total) => setSubmitProgress(`Uploading photo ${index} of ${total}…`));
+      setSelected(result.ticket);
+      setPhotoWarning(result.incomplete.length ? {
+        id: result.ticket.id,
+        message: `Your request was saved, but photo uploads were interrupted: ${issueMessage(result.error)} Check the Photos list below before adding missing pictures (${result.incomplete.map((file) => file.name).join(", ")}). You do not need to submit another request.`,
+      } : null);
+      setTicketPhotos([]); setCreateOpen(false); setPage("Tickets"); notify("Request submitted for IT Admin review.");
+    } catch (error) { setCreateError(issueMessage(error)); }
+    finally { setBusy(false); setSubmitProgress(""); ticketSubmitting.current = false; }
   }
   async function changeTicket(fields: Partial<TicketItem>) {
     if (!selectedLive || !profile || !user || !canUpdateTicket(profile.role, user.uid, selectedLive)) return;
@@ -293,12 +314,15 @@ export default function App() {
         {page === "Users" && profile.role === "IT Admin" && <section className="panel users-panel"><div className="panel-heading users-heading"><div><h2>User directory</h2><p>{users.length} registered profile{users.length === 1 ? "" : "s"}</p></div><button className="text-btn" onClick={() => { setUserMode("link"); setUserError(""); setUserOpen(true); }}>Link existing account</button></div><div className="table-scroll"><table className="users-table"><thead><tr><th>User</th><th>Role</th><th>Department</th><th>Status</th><th>Security</th></tr></thead><tbody>{users.map((person) => <tr key={person.id}><td><div className="person user-person"><div className="mini-avatar">{initials(person.name)}</div><div><strong>{person.name}</strong><span>{person.email}</span></div></div></td><td><select value={person.role} onChange={(e) => changeRole(person, e.target.value as Role)} disabled={person.id === user.uid} aria-label={`Role for ${person.name}`}><option>Employee</option><option>IT Technician</option><option>IT Admin</option><option>Management</option></select></td><td>{person.department}</td><td>{person.status}</td><td><button className="reset-btn" onClick={async () => { try { await navigator.clipboard.writeText(portalLink(import.meta.env.BASE_URL, window.location.origin, person.role, person.email)); notify("Login link copied."); } catch { notify("Copy unavailable. Please try another browser."); } }}>Copy login link</button><button className="reset-btn" onClick={async () => { try { await sendUserPasswordReset(person.email); notify("Password reset email sent."); } catch (error) { notify(issueMessage(error)); } }}>Send reset email</button></td></tr>)}</tbody></table>{!users.length && <div className="empty-state">No user profiles found.</div>}</div></section>}
       </div>
     </main>
-    {createOpen && <div className="modal-layer" role="dialog" aria-modal="true" aria-label="Submit request"><button className="modal-backdrop" onClick={() => setCreateOpen(false)}/><form className="ticket-modal" onSubmit={createTicket}><div className="modal-heading"><div><h2>Submit support request</h2><p>Describe the issue so the IT team can help.</p></div><button type="button" className="icon-btn" onClick={() => setCreateOpen(false)}><X size={20}/></button></div><div className="form-body">
+    {createOpen && <div className="modal-layer" role="dialog" aria-modal="true" aria-label="Submit request"><button className="modal-backdrop" aria-label="Close request form" disabled={busy} onClick={closeCreate}/><form className="ticket-modal" onSubmit={createTicket}><div className="modal-heading"><div><h2>Submit support request</h2><p>Describe the issue so the IT team can help.</p></div><button type="button" className="icon-btn" aria-label="Close request form" disabled={busy} onClick={closeCreate}><X size={20}/></button></div><fieldset className="form-body" disabled={busy}>
       <label className="full">Subject<input name="subject" required maxLength={160} autoFocus placeholder="Short summary of the issue"/></label><label className="full">Description<textarea name="description" required rows={4} placeholder="What happened, and how is it affecting your work?"/></label>
       <label>Category<select name="category" required defaultValue=""><option value="" disabled>Select category</option><option>Hardware</option><option>Software</option><option>Network</option><option>Access</option><option>Email</option><option>Other</option></select></label>
       <div className="request-review-info full">IT Admin will review your request, determine its priority, and assign an IT person.</div>
       <label>Location<input name="location" placeholder="e.g. KK Office" required/></label><label>Business impact<select name="impact" defaultValue="Single User"><option>Single User</option><option>Multiple Users</option><option>Department</option><option>Entire Company</option></select></label>
-    </div><div className="modal-actions"><button type="button" className="secondary-btn" onClick={() => setCreateOpen(false)}>Cancel</button><button className="primary-btn" disabled={busy}>{busy ? "Submitting…" : "Submit request"}</button></div></form></div>}
+      {driveReady && <TicketPhotoPicker files={ticketPhotos} onChange={setTicketPhotos} disabled={busy}/>}
+      {createError && <div className="auth-message error full" role="alert">{createError}</div>}
+      {busy && <div className="submission-progress full" role="status">{submitProgress} Please keep this page open.</div>}
+    </fieldset><div className="modal-actions"><button type="button" className="secondary-btn" disabled={busy} onClick={closeCreate}>Cancel</button><button className="primary-btn" disabled={busy}>{busy ? submitProgress : "Submit request"}</button></div></form></div>}
     {userOpen && profile.role === "IT Admin" && <div className="modal-layer" role="dialog" aria-modal="true" aria-label={userMode === "create" ? "Create user" : "Link existing account"}>
       <button className="modal-backdrop" aria-label="Close user form" disabled={userBusy} onClick={() => setUserOpen(false)}/>
       <form className="ticket-modal" onSubmit={createUser}>
@@ -335,6 +359,7 @@ export default function App() {
         <button className="primary-btn" disabled={busy}>{busy ? "Saving…" : "Save review and assignment"}</button>
       </form>}
       <div className="ticket-controls"><label>Status<select value={selectedLive.status} disabled={!operatorPortal || !canUpdateTicket(profile.role, user.uid, selectedLive)} onChange={(e) => changeTicket({ status: e.target.value as Status })}>{statuses.map((status) => <option key={status}>{status}</option>)}</select></label></div>
+      {photoWarning?.id === selectedLive.id && <div className="auth-message error attachment-warning" role="alert">{photoWarning.message}</div>}
       <DriveAttachments key={selectedLive.id} ticketId={selectedLive.id} canUpload={selectedLive.requesterId === user.uid || profile.role === "IT Admin" || (operatorPortal && canUpdateTicket(profile.role, user.uid, selectedLive))}/>
       <h3>Updates</h3>{Object.entries(selectedLive.updates || {}).sort((a,b) => a[1].createdAt - b[1].createdAt).map(([id, note]) => <div className="ticket-note" key={id}><p>{note.text}</p><small>{note.author} · {displayDate(note.createdAt)}</small></div>)}{!selectedLive.updates && <p className="muted-cell">No updates yet.</p>}
       {operatorPortal && canUpdateTicket(profile.role, user.uid, selectedLive) && <form className="ticket-note-form" onSubmit={addNote}><label>Update<textarea name="note" rows={3} required placeholder="Add a progress update"/></label><button className="primary-btn">Add note</button></form>}
