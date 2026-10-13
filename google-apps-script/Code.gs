@@ -16,6 +16,11 @@ function doPost(event) {
     if (!text || text.length > Math.ceil(MAX_BYTES * 4 / 3) + 20000) throw new Error('Upload is too large.');
     const request = JSON.parse(text);
     const access = authorize_(request);
+    if (request.action === 'notify') {
+      if (!access.canUpload) throw new Error('You cannot send request notifications.');
+      pollTicketNotifications();
+      return output_({ ok: true });
+    }
     if (request.action === 'list') return output_({ ok: true, files: list_(access.ticketId) });
     if (request.action === 'upload') return output_({ ok: true, file: upload_(request, access) });
     if (request.action === 'download') return output_({ ok: true, file: download_(request, access) });

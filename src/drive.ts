@@ -31,3 +31,8 @@ export async function uploadPhoto(ticketId: string, file: File) {
   });
   return driveRequest<{ file: DrivePhoto }>(ticketId, 'upload', { name: file.name, mime: file.type, base64 });
 }
+
+// Saving a ticket succeeds independently of email delivery. The scheduled worker retries later.
+export function wakeTicketNotifications(ticketId: string) {
+  if (driveReady) void driveRequest(ticketId, 'notify').catch(() => {});
+}

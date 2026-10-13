@@ -64,3 +64,20 @@ test('only an active IT Admin can delete pending or reviewed submissions', () =>
   people.admin.status = 'Active';
   assert.equal(write('admin', reviewed, { ...reviewed, requesterId: 'admin' }), false);
 });
+
+
+test('requesters can append an authenticated reply but cannot edit or delete notes', () => {
+  const node = rules.tickets.$ticketId.updates.$updateId;
+  const evaluateNote = (expression, uid, old, next, request = reviewed) => Function('auth', 'root', 'data', 'newData', '$ticketId', `return (${expression});`)(uid ? { uid } : null, new Snapshot({ users: people, tickets: { request } }), new Snapshot(old), new Snapshot(next), 'request');
+  const note = { text: 'Please check again', author: 'Employee', authorId: 'employee', createdAt: 10 };
+  assert.equal(evaluateNote(node['.write'], 'employee', null, note), true);
+  assert.equal(evaluateNote(node['.validate'], 'employee', null, note), true);
+  assert.equal(evaluateNote(node['.write'], 'otherTech', null, note), false);
+  assert.equal(evaluateNote(node['.write'], null, null, note), false);
+  assert.equal(evaluateNote(node['.write'], 'employee', note, { ...note, text: 'Edited' }), false);
+  assert.equal(evaluateNote(node['.write'], 'employee', note, null), false);
+  assert.equal(evaluateNote(node['.validate'], 'employee', null, { ...note, authorId: 'admin' }), false);
+  assert.equal(evaluateNote(node['.validate'], 'employee', null, { ...note, author: 'Admin' }), false);
+  assert.equal(evaluateNote(node['.validate'], 'employee', null, { ...note, text: 'x'.repeat(4001) }), false);
+  assert.equal(write('employee', reviewed, { ...reviewed, status: 'Resolved' }), false);
+});

@@ -4,7 +4,7 @@ import { onAuthStateChanged, signInWithEmailAndPassword, signOut, updatePassword
 import { equalTo, onValue, orderByChild, push, query, ref, remove, set, update } from "firebase/database";
 import DriveAttachments from "./DriveAttachments";
 import TicketPhotoPicker from "./TicketPhotoPicker";
-import { driveReady, uploadPhoto } from "./drive";
+import { driveReady, uploadPhoto, wakeTicketNotifications } from "./drive";
 import { submitWithPhotos } from "./ticket-submission";
 import { canUpdateTicket, isOperatorPath, isStaffRole, portalLink } from "./portal";
 import { auth, database, generateTemporaryPassword, provisionUser, sendUserPasswordReset } from "./firebase";
@@ -80,6 +80,7 @@ export default function App() {
   const [users, setUsers] = useState<Profile[]>([]);
   const [tickets, setTickets] = useState<TicketItem[]>([]);
   const [ticketsLoading, setTicketsLoading] = useState(true);
+  const ticketsReady = useRef(false);
   const [loadError, setLoadError] = useState("");
   const [page, setPage] = useState<"Dashboard" | "Tickets" | "Users">(operatorPortal ? "Dashboard" : "Tickets");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -101,6 +102,10 @@ export default function App() {
   const [credentials, setCredentials] = useState<{ email: string; password: string; role: Role } | null>(null);
   const [copyFeedback, setCopyFeedback] = useState("");
   const [selected, setSelected] = useState<TicketItem | null>(null);
+  const [linkedTicket, setLinkedTicket] = useState(() => new URLSearchParams(window.location.search).get("ticket"));
+  const [linkError, setLinkError] = useState("");
+  const [noteBusy, setNoteBusy] = useState(false);
+  const noteSubmitting = useRef(false);
   const [deleteTarget, setDeleteTarget] = useState<TicketItem | null>(null);
   const [deleting, setDeleting] = useState(false);
   const deletingTicket = useRef(false);
@@ -113,8 +118,10 @@ export default function App() {
   const notify = (message: string) => { setToast(message); window.setTimeout(() => setToast(""), 4500); };
 
   useEffect(() => onAuthStateChanged(auth, (next) => {
+    ticketsReady.current = false;
     setUser(next); setProfile(null); setProfileLoading(!!next); setAuthLoading(false);
     setCredentials(null); setUserOpen(false); setUserError("");
+    setSelected(null); setLinkError("");
     setDeleteTarget(null); setDeleteError("");
     setCreateOpen(false); setTicketPhotos([]); setCreateError(""); setPhotoWarning(null);
   }), []);
@@ -126,6 +133,7 @@ export default function App() {
   }, [user]);
   useEffect(() => {
     if (!user || !profile || profile.status !== "Active") { setTickets([]); setTicketsLoading(false); return; }
+    ticketsReady.current = false;
     setTicketsLoading(true);
     if (operatorPortal && !isStaffRole(profile.role)) { setTickets([]); setTicketsLoading(false); return; }
     const ticketQuery = !operatorPortal || profile.role === "Employee"
@@ -136,6 +144,7 @@ export default function App() {
     return onValue(ticketQuery, (snapshot) => {
       const value = snapshot.val() || {};
       setTickets(Object.entries(value).map(([id, item]) => ({ ...item as Omit<TicketItem, "id">, id })).sort((a, b) => b.createdAt - a.createdAt));
+      ticketsReady.current = true;
       setTicketsLoading(false); setLoadError("");
     }, (error) => { setTicketsLoading(false); setLoadError(issueMessage(error)); });
   }, [user, profile?.id, profile?.role, profile?.status]);
@@ -145,6 +154,14 @@ export default function App() {
       setUsers(Object.entries(snapshot.val() || {}).map(([id, item]) => ({ ...item as Omit<Profile, "id">, id })));
     }, (error) => setLoadError(issueMessage(error)));
   }, [profile?.role]);
+
+  useEffect(() => {
+    if (!linkedTicket || !ticketsReady.current || ticketsLoading || !user || !profile || loadError) return;
+    const ticket = tickets.find((item) => item.id === linkedTicket);
+    if (ticket) { setSelected(ticket); setPage("Tickets"); setLinkError(""); }
+    else setLinkError("This ticket is unavailable or you do not have access to it.");
+    setLinkedTicket(null);
+  }, [linkedTicket, ticketsLoading, tickets, user, profile, loadError]);
 
   const visibleTickets = useMemo(() => tickets.filter((ticket) =>
     (operatorPortal || ticket.requesterId === user?.uid) &&
@@ -176,6 +193,7 @@ export default function App() {
         await set(ticketRef, newTicket);
         return { ...newTicket, id: ticketRef.key! };
       }, uploadPhoto, (index, total) => setSubmitProgress(`Uploading photo ${index} of ${total}…`));
+      wakeTicketNotifications(result.ticket.id);
       setSelected(result.ticket);
       setPhotoWarning(result.incomplete.length ? {
         id: result.ticket.id,
@@ -187,20 +205,23 @@ export default function App() {
   }
   async function changeTicket(fields: Partial<TicketItem>) {
     if (!selectedLive || !profile || !user || !canUpdateTicket(profile.role, user.uid, selectedLive)) return;
-    try { await update(ref(database, `tickets/${selectedLive.id}`), { ...fields, updatedAt: Date.now() }); notify("Ticket updated."); }
+    try { await update(ref(database, `tickets/${selectedLive.id}`), { ...fields, updatedAt: Date.now() }); wakeTicketNotifications(selectedLive.id); notify("Ticket updated."); }
     catch (error) { notify(issueMessage(error)); }
   }
   async function addNote(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedLive || !profile || !user || !canUpdateTicket(profile.role, user.uid, selectedLive)) return;
+    if (!selectedLive || !profile || !user || noteSubmitting.current || !(selectedLive.requesterId === user.uid || (operatorPortal && canUpdateTicket(profile.role, user.uid, selectedLive)))) return;
     const form = event.currentTarget;
     const value = String(new FormData(form).get("note")).trim();
-    if (!value) return;
+    if (!value || value.length > 4000) return;
+    noteSubmitting.current = true; setNoteBusy(true);
     try {
       const noteRef = push(ref(database, `tickets/${selectedLive.id}/updates`));
-      await set(noteRef, { text: value, author: profile.name, createdAt: Date.now() });
+      await set(noteRef, { text: value, author: profile.name, authorId: user.uid, createdAt: Date.now() });
+      wakeTicketNotifications(selectedLive.id);
       form.reset(); notify("Update added.");
     } catch (error) { notify(issueMessage(error)); }
+    finally { noteSubmitting.current = false; setNoteBusy(false); }
   }
   async function createUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -243,7 +264,7 @@ export default function App() {
         priority, technicianId: technician.id, technician: technician.name,
         reviewedAt: Date.now(), reviewedBy: user.uid, updatedAt: Date.now(),
       });
-      notify("Request reviewed and assigned.");
+      wakeTicketNotifications(selectedLive.id); notify("Request reviewed and assigned.");
     } catch (error) { notify(issueMessage(error)); }
     finally { setBusy(false); }
   }
@@ -294,6 +315,7 @@ export default function App() {
         <div className="page-heading"><div><h1>{page === "Dashboard" ? `Welcome, ${profile.name.split(" ")[0]}` : !operatorPortal ? "My requests" : page}</h1><p>{page === "Dashboard" ? "Your helpdesk at a glance." : page === "Tickets" ? operatorPortal ? "Review and manage support requests." : "Submit a request and follow its progress." : "Manage helpdesk accounts."}</p></div>
           <button className="primary-btn" onClick={() => { if (page === "Users") { setUserMode("create"); setUserError(""); setUserOpen(true); } else setCreateOpen(true); }}>{page === "Users" ? <UserPlus size={17}/> : <Plus size={17}/>} {page === "Users" ? "Create user" : "Submit request"}</button>
         </div>
+        {linkError && <div className="auth-message error workspace-error" role="alert">{linkError}</div>}
         {loadError && <div className="auth-message error workspace-error"><CircleAlert size={17}/>{loadError}</div>}
         {page === "Dashboard" && <>
           <section className="stats-grid">{[
@@ -362,7 +384,7 @@ export default function App() {
       {photoWarning?.id === selectedLive.id && <div className="auth-message error attachment-warning" role="alert">{photoWarning.message}</div>}
       <DriveAttachments key={selectedLive.id} ticketId={selectedLive.id} canUpload={selectedLive.requesterId === user.uid || profile.role === "IT Admin" || (operatorPortal && canUpdateTicket(profile.role, user.uid, selectedLive))}/>
       <h3>Updates</h3>{Object.entries(selectedLive.updates || {}).sort((a,b) => a[1].createdAt - b[1].createdAt).map(([id, note]) => <div className="ticket-note" key={id}><p>{note.text}</p><small>{note.author} · {displayDate(note.createdAt)}</small></div>)}{!selectedLive.updates && <p className="muted-cell">No updates yet.</p>}
-      {operatorPortal && canUpdateTicket(profile.role, user.uid, selectedLive) && <form className="ticket-note-form" onSubmit={addNote}><label>Update<textarea name="note" rows={3} required placeholder="Add a progress update"/></label><button className="primary-btn">Add note</button></form>}
+      {(selectedLive.requesterId === user.uid || (operatorPortal && canUpdateTicket(profile.role, user.uid, selectedLive))) && <form className="ticket-note-form" onSubmit={addNote}><label>Reply / update<textarea name="note" rows={3} required maxLength={4000} disabled={noteBusy} placeholder="Add a reply or progress update"/></label><button className="primary-btn" disabled={noteBusy}>{noteBusy ? "Sending…" : "Send reply"}</button></form>}
       {operatorPortal && profile.role === "IT Admin" && <div className="ticket-delete-section"><button type="button" className="danger-btn" onClick={() => { setDeleteError(""); setDeleteTarget(selectedLive); }}>Delete ticket</button></div>}
       </div></aside></div>}
     {deleteTarget && operatorPortal && profile.role === "IT Admin" && <div className="modal-layer" role="alertdialog" aria-modal="true" aria-labelledby="delete-ticket-title" aria-describedby="delete-ticket-description">
