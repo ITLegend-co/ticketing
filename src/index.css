@@ -316,3 +316,9 @@ tbody tr { transition: background .15s; cursor: pointer; } tbody tr:hover { back
 .request-photos .photo-error { color: #b64049; }
 .photo-preview { display: grid; gap: 12px; margin-top: 15px; }
 .photo-preview img { max-width: 100%; max-height: 400px; object-fit: contain; border-radius: 8px; }
+.ticket-delete-section { margin-top: 28px; padding-top: 18px; border-top: 1px solid #e7eaf0; }
+.danger-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 8px 14px; border: 1px solid #bd3545; border-radius: 7px; background: #bd3545; color: #fff; font-size: 12px; font-weight: 600; }
+.danger-btn:hover { background: #a52837; }
+.delete-ticket-copy { padding: 20px; font-size: 13px; line-height: 1.6; color: #4b566b; }
+.delete-ticket-copy strong { color: #243147; }
+.delete-ticket-copy .auth-message { font-size: 12px; }

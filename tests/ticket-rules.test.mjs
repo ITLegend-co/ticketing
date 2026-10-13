@@ -54,7 +54,13 @@ test('technicians must query requests assigned to themselves', () => {
   assert.equal(evaluate(rule, 'tech', null, null, { orderByChild: 'technicianId', equalTo: 'tech' }), true);
   assert.equal(evaluate(rule, 'admin'), true);
 });
-test('requests cannot be deleted or their requester changed through the workflow', () => {
+test('only an active IT Admin can delete pending or reviewed submissions', () => {
+  assert.equal(write('admin', pending, null), true);
+  assert.equal(write('admin', reviewed, null), true);
+  for (const role of ['employee', 'tech', 'otherTech']) assert.equal(write(role, reviewed, null), false);
+  assert.equal(write(null, reviewed, null), false);
+  people.admin.status = 'Suspended';
   assert.equal(write('admin', reviewed, null), false);
+  people.admin.status = 'Active';
   assert.equal(write('admin', reviewed, { ...reviewed, requesterId: 'admin' }), false);
 });

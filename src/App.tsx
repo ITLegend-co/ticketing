@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { User as FirebaseUser } from "firebase/auth";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, updatePassword } from "firebase/auth";
-import { equalTo, onValue, orderByChild, push, query, ref, set, update } from "firebase/database";
+import { equalTo, onValue, orderByChild, push, query, ref, remove, set, update } from "firebase/database";
 import DriveAttachments from "./DriveAttachments";
 import { canUpdateTicket, isOperatorPath, isStaffRole, portalLink } from "./portal";
 import { auth, database, generateTemporaryPassword, provisionUser, sendUserPasswordReset } from "./firebase";
@@ -89,6 +89,10 @@ export default function App() {
   const [credentials, setCredentials] = useState<{ email: string; password: string; role: Role } | null>(null);
   const [copyFeedback, setCopyFeedback] = useState("");
   const [selected, setSelected] = useState<TicketItem | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<TicketItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const deletingTicket = useRef(false);
+  const [deleteError, setDeleteError] = useState("");
   const [search, setSearch] = useState("");
   const [priority, setPriority] = useState("All priorities");
   const [statusFilter, setStatusFilter] = useState("All statuses");
@@ -99,6 +103,7 @@ export default function App() {
   useEffect(() => onAuthStateChanged(auth, (next) => {
     setUser(next); setProfile(null); setProfileLoading(!!next); setAuthLoading(false);
     setCredentials(null); setUserOpen(false); setUserError("");
+    setDeleteTarget(null); setDeleteError("");
   }), []);
   useEffect(() => {
     if (!user) return;
@@ -226,6 +231,16 @@ export default function App() {
     try { await update(ref(database, `users/${person.id}`), { role }); notify("Role updated."); }
     catch (error) { notify(issueMessage(error)); }
   }
+  async function deleteTicket() {
+    if (!operatorPortal || profile?.role !== "IT Admin" || !deleteTarget || deletingTicket.current) return;
+    deletingTicket.current = true;
+    setDeleting(true); setDeleteError("");
+    try {
+      await remove(ref(database, `tickets/${deleteTarget.id}`));
+      setSelected(null); setDeleteTarget(null); notify("Ticket submission deleted.");
+    } catch (error) { setDeleteError(issueMessage(error)); }
+    finally { deletingTicket.current = false; setDeleting(false); }
+  }
   async function changePassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!user) return;
@@ -323,7 +338,15 @@ export default function App() {
       <DriveAttachments key={selectedLive.id} ticketId={selectedLive.id} canUpload={selectedLive.requesterId === user.uid || profile.role === "IT Admin" || (operatorPortal && canUpdateTicket(profile.role, user.uid, selectedLive))}/>
       <h3>Updates</h3>{Object.entries(selectedLive.updates || {}).sort((a,b) => a[1].createdAt - b[1].createdAt).map(([id, note]) => <div className="ticket-note" key={id}><p>{note.text}</p><small>{note.author} · {displayDate(note.createdAt)}</small></div>)}{!selectedLive.updates && <p className="muted-cell">No updates yet.</p>}
       {operatorPortal && canUpdateTicket(profile.role, user.uid, selectedLive) && <form className="ticket-note-form" onSubmit={addNote}><label>Update<textarea name="note" rows={3} required placeholder="Add a progress update"/></label><button className="primary-btn">Add note</button></form>}
+      {operatorPortal && profile.role === "IT Admin" && <div className="ticket-delete-section"><button type="button" className="danger-btn" onClick={() => { setDeleteError(""); setDeleteTarget(selectedLive); }}>Delete ticket</button></div>}
       </div></aside></div>}
+    {deleteTarget && operatorPortal && profile.role === "IT Admin" && <div className="modal-layer" role="alertdialog" aria-modal="true" aria-labelledby="delete-ticket-title" aria-describedby="delete-ticket-description">
+      <button className="modal-backdrop" aria-label="Cancel deletion" disabled={deleting} onClick={() => setDeleteTarget(null)}/>
+      <div className="ticket-modal delete-ticket-modal"><div className="modal-heading"><h2 id="delete-ticket-title">Delete this ticket?</h2></div><div className="delete-ticket-copy">
+        <strong>{deleteTarget.subject}</strong><p id="delete-ticket-description">This permanently removes the submission and all its updates. It cannot be undone. Uploaded photos stay in your Google Drive archive.</p>
+        {deleteError && <div className="auth-message error" role="alert">{deleteError}</div>}
+      </div><div className="modal-actions"><button type="button" className="secondary-btn" disabled={deleting} onClick={() => setDeleteTarget(null)}>Cancel</button><button type="button" className="danger-btn" disabled={deleting} onClick={deleteTicket}>{deleting ? "Deleting…" : "Delete permanently"}</button></div></div>
+    </div>}
     {toast && <div className="toast" role="status"><Check size={17}/>{toast}</div>}
   </div>;
 }
