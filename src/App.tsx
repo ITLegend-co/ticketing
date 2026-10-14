@@ -102,6 +102,14 @@ export default function App() {
   const [credentials, setCredentials] = useState<{ email: string; password: string; role: Role } | null>(null);
   const [copyFeedback, setCopyFeedback] = useState("");
   const [selected, setSelected] = useState<TicketItem | null>(null);
+  const [ticketDraft, setTicketDraft] = useState<Partial<TicketItem>>({});
+  const [replyDraft, setReplyDraft] = useState("");
+  useEffect(() => { setTicketDraft({}); setReplyDraft(""); }, [selected?.id]);
+  function closeTicket() {
+    if (noteSubmitting.current) return;
+    if ((Object.keys(ticketDraft).length || replyDraft.trim()) && !window.confirm("Discard your unsent reply and ticket changes?")) return;
+    setSelected(null);
+  }
   const [linkedTicket, setLinkedTicket] = useState(() => new URLSearchParams(window.location.search).get("ticket"));
   const [linkError, setLinkError] = useState("");
   const [noteBusy, setNoteBusy] = useState(false);
@@ -203,23 +211,36 @@ export default function App() {
     } catch (error) { setCreateError(issueMessage(error)); }
     finally { setBusy(false); setSubmitProgress(""); ticketSubmitting.current = false; }
   }
-  async function changeTicket(fields: Partial<TicketItem>) {
-    if (!selectedLive || !profile || !user || !canUpdateTicket(profile.role, user.uid, selectedLive)) return;
-    try { await update(ref(database, `tickets/${selectedLive.id}`), { ...fields, updatedAt: Date.now() }); wakeTicketNotifications(selectedLive.id); notify("Ticket updated."); }
-    catch (error) { notify(issueMessage(error)); }
-  }
   async function addNote(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedLive || !profile || !user || noteSubmitting.current || !(selectedLive.requesterId === user.uid || (operatorPortal && canUpdateTicket(profile.role, user.uid, selectedLive)))) return;
     const form = event.currentTarget;
-    const value = String(new FormData(form).get("note")).trim();
+    const value = replyDraft.trim();
     if (!value || value.length > 4000) return;
+    const fields: Partial<TicketItem> = {};
+    const canEdit = operatorPortal && canUpdateTicket(profile.role, user.uid, selectedLive);
+    if (canEdit) {
+      if (ticketDraft.status !== undefined) fields.status = ticketDraft.status;
+      if (profile.role === "IT Admin" && (ticketDraft.priority !== undefined || ticketDraft.technicianId !== undefined)) {
+        const priority = ticketDraft.priority ?? selectedLive.priority;
+        const technician = technicians.find((person) => person.id === (ticketDraft.technicianId ?? selectedLive.technicianId));
+        if (!priorities.includes(priority) || !technician) { notify("Choose a priority and an IT person before sending."); return; }
+        Object.assign(fields, { priority, technicianId: technician.id, technician: technician.name, reviewedAt: Date.now(), reviewedBy: user.uid });
+      }
+      if (!selectedLive.reviewedAt && !fields.reviewedAt && fields.status && fields.status !== "Open") {
+        notify("Choose a priority and an IT person before changing status."); return;
+      }
+      fields.updatedAt = Date.now();
+    }
     noteSubmitting.current = true; setNoteBusy(true);
     try {
       const noteRef = push(ref(database, `tickets/${selectedLive.id}/updates`));
-      await set(noteRef, { text: value, author: profile.name, authorId: user.uid, createdAt: Date.now() });
+      await update(ref(database, `tickets/${selectedLive.id}`), {
+        ...fields,
+        [`updates/${noteRef.key}`]: { text: value, author: profile.name, authorId: user.uid, createdAt: Date.now() },
+      });
       wakeTicketNotifications(selectedLive.id);
-      form.reset(); notify("Update added.");
+      form.reset(); setTicketDraft({}); setReplyDraft(""); notify("Reply and ticket changes saved. Email notification queued.");
     } catch (error) { notify(issueMessage(error)); }
     finally { noteSubmitting.current = false; setNoteBusy(false); }
   }
@@ -250,23 +271,6 @@ export default function App() {
       }
     } catch (error) { setUserError(issueMessage(error)); }
     finally { userSubmitting.current = false; setUserBusy(false); }
-  }
-  async function reviewTicket(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!selectedLive || profile?.role !== "IT Admin" || !user || busy) return;
-    const data = new FormData(event.currentTarget);
-    const priority = String(data.get("reviewPriority")) as Priority;
-    const technician = technicians.find((person) => person.id === data.get("technician"));
-    if (!priorities.includes(priority) || !technician) { notify("Choose a priority and an IT person."); return; }
-    setBusy(true);
-    try {
-      await update(ref(database, `tickets/${selectedLive.id}`), {
-        priority, technicianId: technician.id, technician: technician.name,
-        reviewedAt: Date.now(), reviewedBy: user.uid, updatedAt: Date.now(),
-      });
-      wakeTicketNotifications(selectedLive.id); notify("Request reviewed and assigned.");
-    } catch (error) { notify(issueMessage(error)); }
-    finally { setBusy(false); }
   }
   async function changeRole(person: Profile, role: Role) {
     if (person.id === user?.uid || profile?.role !== "IT Admin") return;
@@ -372,19 +376,19 @@ export default function App() {
       </div>
     </div>}
     {profile.mustChangePassword && <div className="modal-layer" role="dialog" aria-modal="true" aria-label="Change temporary password"><div className="modal-backdrop"/><form className="ticket-modal credential-modal password-change" onSubmit={changePassword}><div className="credential-icon"><ShieldCheck size={23}/></div><h2>Choose a new password</h2><p>Your temporary password must be changed before continuing.</p><label>New password<input name="newPassword" type="password" minLength={8} required autoFocus/></label><button className="primary-btn">Update password</button></form></div>}
-    {selectedLive && <div className="drawer-layer"><button className="drawer-backdrop" onClick={() => setSelected(null)}/><aside className="ticket-drawer"><div className="drawer-head"><span>Ticket #{selectedLive.id.slice(-7)}</span><button className="icon-btn" onClick={() => setSelected(null)}><X size={20}/></button></div><div className="drawer-body"><h2>{selectedLive.subject}</h2><p className="ticket-description">{selectedLive.description}</p><div className="detail-grid"><div><span>Requester</span><strong>{selectedLive.requester}</strong></div><div><span>Created</span><strong>{displayDate(selectedLive.createdAt)}</strong></div><div><span>Department</span><strong>{selectedLive.department}</strong></div><div><span>Location</span><strong>{selectedLive.location}</strong></div><div><span>Category</span><strong>{selectedLive.category}</strong></div><div><span>Priority</span><strong>{selectedLive.reviewedAt ? selectedLive.priority : "Awaiting review"}</strong></div><div><span>Business impact</span><strong>{selectedLive.impact}</strong></div></div>
+    {selectedLive && <div className="drawer-layer"><button className="drawer-backdrop" onClick={closeTicket}/><aside className="ticket-drawer"><div className="drawer-head"><span>Ticket #{selectedLive.id.slice(-7)}</span><button className="icon-btn" onClick={closeTicket}><X size={20}/></button></div><div className="drawer-body"><h2>{selectedLive.subject}</h2><p className="ticket-description">{selectedLive.description}</p><div className="detail-grid"><div><span>Requester</span><strong>{selectedLive.requester}</strong></div><div><span>Created</span><strong>{displayDate(selectedLive.createdAt)}</strong></div><div><span>Department</span><strong>{selectedLive.department}</strong></div><div><span>Location</span><strong>{selectedLive.location}</strong></div><div><span>Category</span><strong>{selectedLive.category}</strong></div><div><span>Priority</span><strong>{selectedLive.reviewedAt ? selectedLive.priority : "Awaiting review"}</strong></div><div><span>Business impact</span><strong>{selectedLive.impact}</strong></div></div>
       <div className="request-review-info">{selectedLive.reviewedAt ? `Reviewed · ${selectedLive.priority} priority · Assigned to ${selectedLive.technician}` : "Awaiting IT Admin review. Priority and assignment have not been set."}</div>
-      {operatorPortal && profile.role === "IT Admin" && <form className="admin-review-form" key={selectedLive.id + String(selectedLive.reviewedAt)} onSubmit={reviewTicket}>
+      {operatorPortal && profile.role === "IT Admin" && <div className="admin-review-form">
         <h3>{selectedLive.reviewedAt ? "Update priority and assignment" : "Review request"}</h3>
-        <label>1. Determine priority<select name="reviewPriority" required defaultValue={selectedLive.reviewedAt ? selectedLive.priority : ""}><option value="" disabled>Select priority</option>{priorities.map((priority) => <option key={priority}>{priority}</option>)}</select></label>
-        <label>2. Assign IT person<select name="technician" required defaultValue={selectedLive.technicianId || ""}><option value="" disabled>Select IT person</option>{technicians.map((person) => <option key={person.id} value={person.id}>{person.name}{person.id === user.uid ? " (myself)" : ""}</option>)}</select></label>
-        <button className="primary-btn" disabled={busy}>{busy ? "Saving…" : "Save review and assignment"}</button>
-      </form>}
-      <div className="ticket-controls"><label>Status<select value={selectedLive.status} disabled={!operatorPortal || !canUpdateTicket(profile.role, user.uid, selectedLive)} onChange={(e) => changeTicket({ status: e.target.value as Status })}>{statuses.map((status) => <option key={status}>{status}</option>)}</select></label></div>
+        <label>1. Determine priority<select name="reviewPriority" disabled={noteBusy} value={ticketDraft.priority ?? (selectedLive.reviewedAt ? selectedLive.priority : "")} onChange={(e) => setTicketDraft((draft) => ({ ...draft, priority: e.target.value as Priority }))}><option value="" disabled>Select priority</option>{priorities.map((priority) => <option key={priority}>{priority}</option>)}</select></label>
+        <label>2. Assign IT person<select name="technician" disabled={noteBusy} value={ticketDraft.technicianId ?? selectedLive.technicianId ?? ""} onChange={(e) => setTicketDraft((draft) => ({ ...draft, technicianId: e.target.value }))}><option value="" disabled>Select IT person</option>{technicians.map((person) => <option key={person.id} value={person.id}>{person.name}{person.id === user.uid ? " (myself)" : ""}</option>)}</select></label>
+      </div>}
+      <div className="ticket-controls"><label>Status<select value={ticketDraft.status ?? selectedLive.status} disabled={noteBusy || !operatorPortal || !canUpdateTicket(profile.role, user.uid, selectedLive)} onChange={(e) => setTicketDraft((draft) => ({ ...draft, status: e.target.value as Status }))}>{statuses.map((status) => <option key={status}>{status}</option>)}</select></label></div>
+      {operatorPortal && canUpdateTicket(profile.role, user.uid, selectedLive) && <p className="request-review-info" role="status">{Object.keys(ticketDraft).length ? "Unsent changes. " : ""}Status, priority, and assignment are saved and included in the email when you click Send reply.</p>}
       {photoWarning?.id === selectedLive.id && <div className="auth-message error attachment-warning" role="alert">{photoWarning.message}</div>}
       <DriveAttachments key={selectedLive.id} ticketId={selectedLive.id} canUpload={selectedLive.requesterId === user.uid || profile.role === "IT Admin" || (operatorPortal && canUpdateTicket(profile.role, user.uid, selectedLive))}/>
       <h3>Updates</h3>{Object.entries(selectedLive.updates || {}).sort((a,b) => a[1].createdAt - b[1].createdAt).map(([id, note]) => <div className="ticket-note" key={id}><p>{note.text}</p><small>{note.author} · {displayDate(note.createdAt)}</small></div>)}{!selectedLive.updates && <p className="muted-cell">No updates yet.</p>}
-      {(selectedLive.requesterId === user.uid || (operatorPortal && canUpdateTicket(profile.role, user.uid, selectedLive))) && <form className="ticket-note-form" onSubmit={addNote}><label>Reply / update<textarea name="note" rows={3} required maxLength={4000} disabled={noteBusy} placeholder="Add a reply or progress update"/></label><button className="primary-btn" disabled={noteBusy}>{noteBusy ? "Sending…" : "Send reply"}</button></form>}
+      {(selectedLive.requesterId === user.uid || (operatorPortal && canUpdateTicket(profile.role, user.uid, selectedLive))) && <form className="ticket-note-form" onSubmit={addNote}><label>Reply / update<textarea name="note" value={replyDraft} onChange={(e) => setReplyDraft(e.target.value)} rows={3} required maxLength={4000} disabled={noteBusy} placeholder="Add a reply or progress update"/></label><button className="primary-btn" disabled={noteBusy}>{noteBusy ? "Sending…" : "Send reply"}</button></form>}
       {operatorPortal && profile.role === "IT Admin" && <div className="ticket-delete-section"><button type="button" className="danger-btn" onClick={() => { setDeleteError(""); setDeleteTarget(selectedLive); }}>Delete ticket</button></div>}
       </div></aside></div>}
     {deleteTarget && operatorPortal && profile.role === "IT Admin" && <div className="modal-layer" role="alertdialog" aria-modal="true" aria-labelledby="delete-ticket-title" aria-describedby="delete-ticket-description">
