@@ -1,12 +1,13 @@
+import { appendReplyPhotos, pastedPhotos } from "./paste-photos";
 import { displayName } from "./display-name";
 import ReportDownload from "./ReportDownload";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ClipboardEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { User as FirebaseUser } from "firebase/auth";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, updatePassword } from "firebase/auth";
 import { equalTo, onValue, orderByChild, push, query, ref, remove, set, update } from "firebase/database";
 import DriveAttachments from "./DriveAttachments";
 import TicketPhotoPicker from "./TicketPhotoPicker";
-import { driveReady, uploadPhoto, wakeTicketNotifications } from "./drive";
+import { driveReady, driveRequest, DrivePhoto, MAX_PHOTOS, uploadPhoto, wakeTicketNotifications } from "./drive";
 import { submitWithPhotos } from "./ticket-submission";
 import { canUpdateTicket, isOperatorPath, isStaffRole, portalLink } from "./portal";
 import { auth, database, generateTemporaryPassword, provisionUser, sendUserPasswordReset } from "./firebase";
@@ -106,10 +107,25 @@ export default function App() {
   const [selected, setSelected] = useState<TicketItem | null>(null);
   const [ticketDraft, setTicketDraft] = useState<Partial<TicketItem>>({});
   const [replyDraft, setReplyDraft] = useState("");
-  useEffect(() => { setTicketDraft({}); setReplyDraft(""); }, [selected?.id]);
+  const [replyPhotos, setReplyPhotos] = useState<File[]>([]);
+  const [replyError, setReplyError] = useState("");
+  const [replyProgress, setReplyProgress] = useState("");
+  const [photoRevision, setPhotoRevision] = useState(0);
+  useEffect(() => { setTicketDraft({}); setReplyDraft(""); setReplyPhotos([]); setReplyError(""); setReplyProgress(""); }, [selected?.id]);
+  function pasteReply(event: ClipboardEvent<HTMLTextAreaElement>) {
+    if (!Array.from(event.clipboardData.items).some(item => item.kind === "file" && item.type.startsWith("image/"))) return;
+    event.preventDefault();
+    if (noteSubmitting.current) return;
+    if (!driveReady) { setReplyError("Photo uploads are currently unavailable."); return; }
+    try {
+      const files = pastedPhotos(event.clipboardData.items);
+      if (!files.length) throw new Error("Could not read the screenshot. Try Add photos instead.");
+      setReplyPhotos(appendReplyPhotos(replyPhotos, files)); setReplyError("");
+    } catch (error) { setReplyError(issueMessage(error)); }
+  }
   function closeTicket() {
     if (noteSubmitting.current) return;
-    if ((Object.keys(ticketDraft).length || replyDraft.trim()) && !window.confirm("Discard your unsent reply and ticket changes?")) return;
+    if ((Object.keys(ticketDraft).length || replyDraft.trim() || replyPhotos.length) && !window.confirm("Discard your unsent reply and ticket changes?")) return;
     setSelected(null);
   }
   const [linkedTicket, setLinkedTicket] = useState(() => new URLSearchParams(window.location.search).get("ticket"));
@@ -217,7 +233,7 @@ export default function App() {
     event.preventDefault();
     if (!selectedLive || !profile || !user || noteSubmitting.current || !(selectedLive.requesterId === user.uid || (operatorPortal && canUpdateTicket(profile.role, user.uid, selectedLive)))) return;
     const form = event.currentTarget;
-    const value = replyDraft.trim();
+    const value = replyDraft.trim() || (replyPhotos.length ? "Attached screenshot(s)." : "");
     if (!value || value.length > 4000) return;
     const fields: Partial<TicketItem> = {};
     const canEdit = operatorPortal && canUpdateTicket(profile.role, user.uid, selectedLive);
@@ -234,20 +250,35 @@ export default function App() {
       }
       fields.updatedAt = Date.now();
     }
-    noteSubmitting.current = true; setNoteBusy(true);
+    noteSubmitting.current = true; setNoteBusy(true); setReplyError(""); setReplyProgress("Saving reply…");
     try {
+      if (replyPhotos.length) {
+        setReplyProgress("Checking attachments…");
+        const { files } = await driveRequest<{ files: DrivePhoto[] }>(selectedLive.id, "list");
+        if (files.length + replyPhotos.length > MAX_PHOTOS) throw new Error(`This ticket already has ${files.length} photos. A ticket can contain up to ${MAX_PHOTOS} photos in total.`);
+      }
       const noteRef = push(ref(database, `tickets/${selectedLive.id}/updates`));
       const note = { text: value, author: profile.name, authorId: user.uid, createdAt: Date.now() };
-      if (canEdit) {
-        await update(ref(database, `tickets/${selectedLive.id}`), { ...fields, [`updates/${noteRef.key}`]: note });
-      } else {
-        // Requesters may append a reply, but have no ticket-field write permission.
-        await set(noteRef, note);
-      }
+      const result = await submitWithPhotos(replyPhotos, async () => {
+        if (canEdit) {
+          await update(ref(database, `tickets/${selectedLive.id}`), { ...fields, [`updates/${noteRef.key}`]: note });
+        } else {
+          // Requesters may append a reply, but have no ticket-field write permission.
+          await set(noteRef, note);
+        }
+        return { id: selectedLive.id };
+      }, uploadPhoto, (index, total) => setReplyProgress(`Uploading photo ${index} of ${total}…`));
       wakeTicketNotifications(selectedLive.id);
-      form.reset(); setTicketDraft({}); setReplyDraft(""); notify("Reply and ticket changes saved. Email notification queued.");
-    } catch (error) { notify(issueMessage(error)); }
-    finally { noteSubmitting.current = false; setNoteBusy(false); }
+      form.reset(); setTicketDraft({}); setReplyDraft(""); setReplyPhotos([]);
+      setPhotoRevision(revision => revision + 1);
+      if (result.incomplete.length) {
+        setPhotoWarning({ id: selectedLive.id, message: `Your reply was saved, but some photos could not be confirmed: ${result.incomplete.map(file => file.name).join(", ")}. ${issueMessage(result.error)} Check the Photos list before adding missing pictures. Do not resend your reply.` });
+        notify("Reply saved. Please check the photo upload warning.");
+      } else {
+        setPhotoWarning(null); notify("Reply and attachments saved. Email notification queued.");
+      }
+    } catch (error) { setReplyError(issueMessage(error)); }
+    finally { noteSubmitting.current = false; setNoteBusy(false); setReplyProgress(""); }
   }
   async function createUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -391,9 +422,9 @@ export default function App() {
       <div className="ticket-controls"><label>Status<select value={ticketDraft.status ?? selectedLive.status} disabled={noteBusy || !operatorPortal || !canUpdateTicket(profile.role, user.uid, selectedLive)} onChange={(e) => setTicketDraft((draft) => ({ ...draft, status: e.target.value as Status }))}>{statuses.map((status) => <option key={status}>{status}</option>)}</select></label></div>
       {operatorPortal && canUpdateTicket(profile.role, user.uid, selectedLive) && <p className="request-review-info" role="status">{Object.keys(ticketDraft).length ? "Unsent changes. " : ""}Status, priority, and assignment are saved and included in the email when you click Send reply.</p>}
       {photoWarning?.id === selectedLive.id && <div className="auth-message error attachment-warning" role="alert">{photoWarning.message}</div>}
-      <DriveAttachments key={selectedLive.id} ticketId={selectedLive.id} canUpload={selectedLive.requesterId === user.uid || profile.role === "IT Admin" || (operatorPortal && canUpdateTicket(profile.role, user.uid, selectedLive))}/>
+      <DriveAttachments key={`${selectedLive.id}-${photoRevision}`} ticketId={selectedLive.id} canUpload={selectedLive.requesterId === user.uid || profile.role === "IT Admin" || (operatorPortal && canUpdateTicket(profile.role, user.uid, selectedLive))}/>
       <h3>Updates</h3>{Object.entries(selectedLive.updates || {}).sort((a,b) => a[1].createdAt - b[1].createdAt).map(([id, note]) => <div className="ticket-note" key={id}><p>{note.text}</p><small>{displayName(note.author)} · {displayDate(note.createdAt)}</small></div>)}{!selectedLive.updates && <p className="muted-cell">No updates yet.</p>}
-      {(selectedLive.requesterId === user.uid || (operatorPortal && canUpdateTicket(profile.role, user.uid, selectedLive))) && <form className="ticket-note-form" onSubmit={addNote}><label>Reply / update<textarea name="note" value={replyDraft} onChange={(e) => setReplyDraft(e.target.value)} rows={3} required maxLength={4000} disabled={noteBusy} placeholder="Add a reply or progress update"/></label><button className="primary-btn" disabled={noteBusy}>{noteBusy ? "Sending…" : "Send reply"}</button></form>}
+      {(selectedLive.requesterId === user.uid || (operatorPortal && canUpdateTicket(profile.role, user.uid, selectedLive))) && <form className="ticket-note-form" onSubmit={addNote}><label>Reply / update<textarea name="note" onPaste={pasteReply} value={replyDraft} onChange={(e) => setReplyDraft(e.target.value)} rows={3} required={!replyPhotos.length} maxLength={4000} disabled={noteBusy} placeholder="Write a reply, or paste a screenshot here (Ctrl + V)"/></label>{driveReady && <><p className="muted-cell">Paste a screenshot with Ctrl + V, or choose a photo below. Photos upload when you click Send reply. Maximum 5 photos per ticket.</p><TicketPhotoPicker files={replyPhotos} onChange={setReplyPhotos} disabled={noteBusy}/></>}{replyError && <div className="auth-message error" role="alert">{replyError}</div>}{noteBusy && <p role="status">{replyProgress} Please keep this page open.</p>}<button className="primary-btn" disabled={noteBusy}>{noteBusy ? "Sending…" : "Send reply"}</button></form>}
       {operatorPortal && profile.role === "IT Admin" && <div className="ticket-delete-section"><button type="button" className="danger-btn" onClick={() => { setDeleteError(""); setDeleteTarget(selectedLive); }}>Delete ticket</button></div>}
       </div></aside></div>}
     {deleteTarget && operatorPortal && profile.role === "IT Admin" && <div className="modal-layer" role="alertdialog" aria-modal="true" aria-labelledby="delete-ticket-title" aria-describedby="delete-ticket-description">
