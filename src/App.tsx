@@ -33,7 +33,7 @@ const initials = (name: string) => name.split(" ").map((part) => part[0]).join("
 const issueMessage = (error: unknown) => {
   const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
   if (code.includes("invalid-credential")) return "The email or password is incorrect.";
-  if (code.includes("permission-denied")) return "Database permissions rejected this action. Ask the administrator to check the database rules.";
+  if (code.toLowerCase().replace(/_/g, "-").includes("permission-denied")) return "Database permissions rejected this action. Ask the administrator to check the database rules.";
   if (code.includes("email-already-in-use")) return "An account already exists for this email. Use Link existing account if it needs a helpdesk profile.";
   if (code.includes("invalid-email")) return "Enter a valid work email address.";
   if (code.includes("weak-password") || code.includes("password-does-not-meet-requirements")) return "The temporary password does not meet the password requirements. Use a longer password with upper and lowercase letters, numbers, and a symbol.";
@@ -237,10 +237,13 @@ export default function App() {
     noteSubmitting.current = true; setNoteBusy(true);
     try {
       const noteRef = push(ref(database, `tickets/${selectedLive.id}/updates`));
-      await update(ref(database, `tickets/${selectedLive.id}`), {
-        ...fields,
-        [`updates/${noteRef.key}`]: { text: value, author: profile.name, authorId: user.uid, createdAt: Date.now() },
-      });
+      const note = { text: value, author: profile.name, authorId: user.uid, createdAt: Date.now() };
+      if (canEdit) {
+        await update(ref(database, `tickets/${selectedLive.id}`), { ...fields, [`updates/${noteRef.key}`]: note });
+      } else {
+        // Requesters may append a reply, but have no ticket-field write permission.
+        await set(noteRef, note);
+      }
       wakeTicketNotifications(selectedLive.id);
       form.reset(); setTicketDraft({}); setReplyDraft(""); notify("Reply and ticket changes saved. Email notification queued.");
     } catch (error) { notify(issueMessage(error)); }

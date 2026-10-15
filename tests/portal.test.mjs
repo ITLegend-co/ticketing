@@ -20,8 +20,9 @@ test('staff links point to the operator directory', () => {
   }
   assert.equal(isStaffRole('Employee'), false);
 });
-test('work cannot start before admin review', () => {
-  for (const role of ['IT Admin', 'IT Technician', 'Employee']) assert.equal(canUpdateTicket(role, 'it-1', { reviewedAt: 0, technicianId: 'it-1' }), false);
+test('admins can review and reply before assignment; technicians must wait for review', () => {
+  assert.equal(canUpdateTicket('IT Admin', 'admin', { reviewedAt: 0, technicianId: '' }), true);
+  for (const role of ['Management', 'IT Technician', 'Employee']) assert.equal(canUpdateTicket(role, 'it-1', { reviewedAt: 0, technicianId: 'it-1' }), false);
 });
 test('only the admin or assigned IT person can work a reviewed request', () => {
   const ticket = { reviewedAt: 100, technicianId: 'it-1' };

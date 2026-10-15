@@ -15,5 +15,5 @@ export function portalLink(base: string, origin: string, role: string, email: st
 }
 
 export function canUpdateTicket(role: string, uid: string, ticket: { reviewedAt?: number; technicianId: string }) {
-  return !!ticket.reviewedAt && (role === "IT Admin" || (role === "IT Technician" && ticket.technicianId === uid));
+  return role === "IT Admin" || (!!ticket.reviewedAt && role === "IT Technician" && ticket.technicianId === uid);
 }
