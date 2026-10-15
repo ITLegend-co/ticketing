@@ -180,7 +180,7 @@ function pollTicketNotifications() {
         if (remaining <= 0) { complete = false; break; }
         GmailApp.sendEmail(recipient.email,
           '[Mountain Torq IT Helpdesk] ' + event.kind + ' #' + event.ticketId.slice(-7) + ' — ' + String(event.ticket.subject).replace(/[\r\n]/g, ' ').slice(0, 120),
-          mailBody_(event, recipient), { from: MAIL_SENDER, name: 'Mountain Torq IT Helpdesk', replyTo: MAIL_SENDER });
+          mailBody_(event, recipient), { from: MAIL_SENDER, name: 'MT Adly', replyTo: MAIL_SENDER });
         event.sent.push(address);
         remaining--;
         writeMailState_(saved.file, state);
