@@ -7,7 +7,7 @@ import { onAuthStateChanged, signInWithEmailAndPassword, signOut, updatePassword
 import { equalTo, onValue, orderByChild, push, query, ref, remove, set, update } from "firebase/database";
 import DriveAttachments from "./DriveAttachments";
 import TicketPhotoPicker from "./TicketPhotoPicker";
-import { driveReady, driveRequest, DrivePhoto, MAX_PHOTOS, uploadPhoto, wakeTicketNotifications } from "./drive";
+import { driveReady, driveRequest, DrivePhoto, MAX_PHOTOS, uploadPhoto, sendUserWelcome, wakeTicketNotifications } from "./drive";
 import { submitWithPhotos } from "./ticket-submission";
 import { canUpdateTicket, isOperatorPath, isStaffRole, portalLink } from "./portal";
 import { auth, database, generateTemporaryPassword, provisionUser, sendUserPasswordReset } from "./firebase";
@@ -102,7 +102,9 @@ export default function App() {
   const [userError, setUserError] = useState("");
   const [userBusy, setUserBusy] = useState(false);
   const userSubmitting = useRef(false);
-  const [credentials, setCredentials] = useState<{ email: string; password: string; role: Role } | null>(null);
+  const [credentials, setCredentials] = useState<{ uid: string; email: string; password: string; role: Role } | null>(null);
+  const [welcomeStatus, setWelcomeStatus] = useState("");
+  const [welcomeSent, setWelcomeSent] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState("");
   const [selected, setSelected] = useState<TicketItem | null>(null);
   const [ticketDraft, setTicketDraft] = useState<Partial<TicketItem>>({});
@@ -302,8 +304,12 @@ export default function App() {
         setUserOpen(false); notify("Helpdesk profile linked to the Firebase account.");
       } else {
         const password = String(data.get("password") || "") || generateTemporaryPassword();
-        await provisionUser(input, password);
-        setUserOpen(false); setCopyFeedback(""); setCredentials({ email, password, role: input.role }); notify("User account created.");
+        const uid = await provisionUser(input, password);
+        setUserOpen(false); setCopyFeedback(""); setCredentials({ uid, email, password, role: input.role });
+        setWelcomeSent(false); setWelcomeStatus("Account created. Sending welcome email…");
+        try { await sendUserWelcome(uid, password); setWelcomeSent(true); setWelcomeStatus("Welcome email sent with the login link and temporary password."); }
+        catch { setWelcomeStatus("Account created, but the welcome email was not confirmed. Check the Apps Script deployment, then click Retry email. Do not create the account again."); }
+        notify("User account created.");
       }
     } catch (error) { setUserError(issueMessage(error)); }
     finally { userSubmitting.current = false; setUserBusy(false); }
@@ -366,7 +372,7 @@ export default function App() {
             {ticketsLoading ? <div className="empty-state">Loading tickets…</div> : myTickets.length ? <div className="compact-ticket-list">{myTickets.slice(0, 5).map((item) => <button key={item.id} onClick={() => setSelected(item)}><span><strong>{item.subject}</strong><small>{displayName(item.requester)} · {displayDate(item.createdAt)}</small></span><span className={`status ${item.status.toLowerCase().replace(/ /g, "-")}`}>{item.status}</span></button>)}</div> : <div className="empty-state"><strong>No tickets yet</strong><p>Create the first ticket to start tracking support requests.</p><button className="secondary-btn" onClick={() => setCreateOpen(true)}>Create ticket</button></div>}
           </section>
         </>}
-        {page === "Tickets" && <section className="panel tickets-panel"><div className="panel-heading tickets-heading"><div><h2>{!operatorPortal ? "My requests" : "Request queue"}</h2><p>{visibleTickets.length} ticket{visibleTickets.length === 1 ? "" : "s"}</p></div><ReportDownload tickets={myTickets} disabled={ticketsLoading || !!loadError}/></div>
+        {page === "Tickets" && <section className="panel tickets-panel"><div className="panel-heading tickets-heading"><div><h2>{!operatorPortal ? "My requests" : "Request queue"}</h2><p>{visibleTickets.length} ticket{visibleTickets.length === 1 ? "" : "s"}</p></div>{operatorPortal && profile.role === "IT Admin" && <ReportDownload tickets={myTickets} disabled={ticketsLoading || !!loadError}/>}</div>
           <div className="table-tools"><label className="table-search"><Search size={16}/><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search tickets" aria-label="Search tickets"/></label>
             <div className="filter-group"><label><Filter size={15}/><select value={priority} onChange={(e) => setPriority(e.target.value)} aria-label="Filter priority"><option>All priorities</option>{["Unreviewed", ...priorities].map((p) => <option key={p}>{p}</option>)}</select><ChevronDown size={14}/></label>
               <label><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter status"><option>All statuses</option>{statuses.map((s) => <option key={s}>{s}</option>)}</select><ChevronDown size={14}/></label></div>
@@ -404,11 +410,11 @@ export default function App() {
     {credentials && profile.role === "IT Admin" && <div className="modal-layer" role="dialog" aria-modal="true" aria-label="User account created">
       <div className="modal-backdrop"/>
       <div className="ticket-modal credential-modal">
-        <div className="credential-icon"><Check size={23}/></div><h2>User account created</h2><p>{credentials.email} can now sign in. Copy the link and share it together with the temporary password.</p>
+        <div className="credential-icon"><Check size={23}/></div><h2>User account created</h2><p>{credentials.email} can now sign in. The welcome email includes the login link and temporary password.</p>
         <div className="credential-field"><div><span>Temporary password</span><strong>{credentials.password}</strong></div><button type="button" onClick={async () => { try { await navigator.clipboard.writeText(credentials.password); setCopyFeedback("Password copied."); } catch { setCopyFeedback("Copy unavailable. Select and copy the password manually."); } }}>Copy</button></div>
         <div className="credential-field login-link-field"><div><span>Login link</span><strong>{portalLink(import.meta.env.BASE_URL, window.location.origin, credentials.role, credentials.email)}</strong></div><button type="button" onClick={async () => { try { await navigator.clipboard.writeText(portalLink(import.meta.env.BASE_URL, window.location.origin, credentials.role, credentials.email)); setCopyFeedback("Login link copied."); } catch { setCopyFeedback("Select and copy the link manually."); } }}>Copy link</button></div>
         <p className="credential-warning">This password is shown only here. Copy it before closing.</p><p role="status">{copyFeedback}</p>
-        <div className="credential-actions"><button className="primary-btn" onClick={() => setCredentials(null)}>Done</button></div>
+        <p role="status">{welcomeStatus}</p><div className="credential-actions">{!welcomeSent && <button className="secondary-btn" disabled={userBusy} onClick={async () => { if (userSubmitting.current) return; userSubmitting.current = true; setUserBusy(true); try { await sendUserWelcome(credentials.uid, credentials.password); setWelcomeSent(true); setWelcomeStatus("Welcome email sent."); } catch { setWelcomeStatus("Email could not be confirmed. Check the Apps Script deployment and try again."); } finally { userSubmitting.current = false; setUserBusy(false); } }}>{userBusy ? "Sending…" : "Retry email"}</button>}<button className="primary-btn" disabled={userBusy} onClick={() => setCredentials(null)}>Done</button></div>
       </div>
     </div>}
     {profile.mustChangePassword && <div className="modal-layer" role="dialog" aria-modal="true" aria-label="Change temporary password"><div className="modal-backdrop"/><form className="ticket-modal credential-modal password-change" onSubmit={changePassword}><div className="credential-icon"><ShieldCheck size={23}/></div><h2>Choose a new password</h2><p>Your temporary password must be changed before continuing.</p><label>New password<input name="newPassword" type="password" minLength={8} required autoFocus/></label><button className="primary-btn">Update password</button></form></div>}

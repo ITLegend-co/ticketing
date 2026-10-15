@@ -36,3 +36,8 @@ export async function uploadPhoto(ticketId: string, file: File) {
 export function wakeTicketNotifications(ticketId: string) {
   if (driveReady) void driveRequest(ticketId, 'notify').catch(() => {});
 }
+
+// Temporary password is sent over HTTPS only; never stored in the database.
+export async function sendUserWelcome(userId: string, temporaryPassword: string) {
+  return driveRequest(userId, 'welcome', { userId, temporaryPassword });
+}

@@ -15,6 +15,7 @@ function doPost(event) {
     const text = event && event.postData && event.postData.contents;
     if (!text || text.length > Math.ceil(MAX_BYTES * 4 / 3) + 20000) throw new Error('Upload is too large.');
     const request = JSON.parse(text);
+    if (request.action === 'welcome') return output_(sendWelcome_(request));
     const access = authorize_(request);
     if (request.action === 'notify') {
       if (!access.canUpload) throw new Error('You cannot send request notifications.');
@@ -137,4 +138,40 @@ function download_(request, access) {
     return Object.assign(fileInfo_(file), { mime: mime, base64: Utilities.base64Encode(bytes) });
   }
   throw new Error('Photo not found.');
+}
+
+// Admin-only welcome email. Recipient and login URL are resolved server-side.
+// Do not log or persist request contents: they contain a temporary password.
+function sendWelcome_(request) {
+  if (typeof request.idToken !== 'string' || request.idToken.length > 10000
+      || typeof request.userId !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(request.userId)
+      || typeof request.temporaryPassword !== 'string' || request.temporaryPassword.length < 8 || request.temporaryPassword.length > 4096) throw new Error('Invalid welcome email request.');
+  const identity = jsonRequest_('https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + FIREBASE_API_KEY, {
+    method: 'post', contentType: 'application/json', payload: JSON.stringify({ idToken: request.idToken }),
+  });
+  const uid = identity.users && identity.users[0] && identity.users[0].localId;
+  if (!uid) throw new Error('Sign in again.');
+  const suffix = '.json?auth=' + encodeURIComponent(request.idToken);
+  const admin = jsonRequest_(DATABASE_URL + '/users/' + encodeURIComponent(uid) + suffix);
+  if (!admin || admin.role !== 'IT Admin' || admin.status !== 'Active') throw new Error('Only an active IT Admin can send welcome emails.');
+  const lock = LockService.getScriptLock(); lock.waitLock(30000);
+  try {
+    const properties = PropertiesService.getScriptProperties();
+    const marker = 'WELCOME_SENT_' + request.userId;
+    if (properties.getProperty(marker)) return { ok: true, alreadySent: true };
+    const profile = jsonRequest_(DATABASE_URL + '/users/' + encodeURIComponent(request.userId) + suffix);
+    if (!profile || profile.status !== 'Active' || profile.mustChangePassword !== true) throw new Error('This account is not awaiting its first password change.');
+    const email = registeredEmails_([request.userId])[request.userId];
+    if (!email || email.toLowerCase() !== String(profile.email).toLowerCase()) throw new Error('Account email could not be verified.');
+    const staff = ['IT Admin', 'IT Technician', 'Management'].indexOf(profile.role) !== -1;
+    const link = HELP_DESK_URL + (staff ? STAFF_DIRECTORY : '') + '?email=' + encodeURIComponent(email);
+    checkMailSender_();
+    GmailApp.sendEmail(email, 'Your Mountain Torq IT Helpdesk account',
+      'Hello ' + profile.name + ',\n\nYour helpdesk account is ready.\n\nLogin: ' + link
+      + '\nEmail: ' + email + '\nTemporary password: ' + request.temporaryPassword
+      + '\n\nYou will be asked to choose a new password when you sign in. Do not share this password.\n\nMT Adly\nMountain Torq IT Helpdesk',
+      { from: MAIL_SENDER, name: 'MT Adly', replyTo: MAIL_SENDER });
+    properties.setProperty(marker, String(Date.now()));
+    return { ok: true };
+  } finally { lock.releaseLock(); }
 }

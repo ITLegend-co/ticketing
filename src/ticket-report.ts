@@ -1,3 +1,5 @@
+import { auth, database } from "./firebase";
+import { get, ref } from "firebase/database";
 import { displayName } from "./display-name";
 import { driveReady, driveRequest, type DrivePhoto } from "./drive";
 import { reportDate, type ReportTicket } from "./report-data";
@@ -20,6 +22,10 @@ function download(data: BlobPart, name: string, type: string) {
   const a = document.createElement("a"); a.href = url; a.download = name; a.click(); setTimeout(()=>URL.revokeObjectURL(url), 60000);
 }
 export async function exportReport(tickets: ReportTicket[], start: string, end: string, format: "pdf" | "xlsx", progress: (s: string)=>void) {
+  const user = auth.currentUser;
+  if (!user) throw new Error("Sign in as IT Admin to download reports.");
+  const profile = (await get(ref(database, `users/${user.uid}`))).val();
+  if (auth.currentUser?.uid !== user.uid || profile?.role !== "IT Admin" || profile?.status !== "Active") throw new Error("Only active IT Admin accounts can download reports.");
   const entries: Entry[] = [];
   for (const [i, ticket] of tickets.entries()) {
     progress(`Loading photos: ticket ${i + 1} of ${tickets.length}…`);
