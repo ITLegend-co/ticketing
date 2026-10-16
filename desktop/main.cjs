@@ -14,7 +14,7 @@ function load() { if (win && !win.isDestroyed()) win.loadURL(HOME).catch(() => {
 function trayMenu() {
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Open helpdesk', click: show },
-    { label: 'Start with Windows', type: 'checkbox', checked: app.getLoginItemSettings().openAtLogin,
+    { label: 'Start with Windows', type: 'checkbox', checked: app.getLoginItemSettings({ args: ['--hidden'] }).openAtLogin,
       click: item => { app.setLoginItemSettings({ openAtLogin: item.checked, args: ['--hidden'] }); trayMenu(); } },
     { label: 'Reload / reconnect', click: load },
     { type: 'separator' },
@@ -67,6 +67,16 @@ else {
       n.on('close', () => { if (notices.get(id) === n) notices.delete(id); });
       n.show();
     });
+    if (process.argv.includes('--smoke-test')) {
+      const timeout = setTimeout(() => app.exit(2), 60000);
+      win.webContents.on('did-finish-load', async () => {
+        if (!trusted(win.webContents.getURL())) return;
+        try {
+          const ok = await win.webContents.executeJavaScript('typeof window.mtDesktop?.notify === "function" && !!document.querySelector("#root")');
+          clearTimeout(timeout); app.exit(ok ? 0 : 3);
+        } catch { clearTimeout(timeout); app.exit(4); }
+      });
+    }
     load();
   });
 }
