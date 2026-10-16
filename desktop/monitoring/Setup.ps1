@@ -44,6 +44,9 @@ try {
     & icacls.exe $child.FullName /reset /T /Q | Out-Null
     if($LASTEXITCODE -ne 0){throw 'Could not secure monitoring files.'}
   }
+  foreach ($cache in @('inventory.json','inventory-sent.txt','network.json','history-slot.txt')) {
+    Remove-Item (Join-Path $store $cache) -Force -ErrorAction SilentlyContinue
+  }
   Copy-Item (Join-Path $PSScriptRoot 'Collect.ps1') (Join-Path $store 'Collect.ps1') -Force
   @{deviceId=$config.deviceId;apiKey=$config.apiKey} | ConvertTo-Json | Set-Content (Join-Path $store 'config.json')
   $encrypted=[Security.Cryptography.ProtectedData]::Protect([Text.Encoding]::UTF8.GetBytes($login.refreshToken),$null,[Security.Cryptography.DataProtectionScope]::LocalMachine)

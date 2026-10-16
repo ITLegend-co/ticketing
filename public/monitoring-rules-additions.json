@@ -64,9 +64,8 @@
         ".validate": "newData.isBoolean()"
       },
       "disks": {
-        ".validate": "newData.numChildren() <= 32",
         "$disk": {
-          ".validate": "newData.hasChildren(['name','totalGB','freeGB','usedPercent']) && newData.numChildren() === 4",
+          ".validate": "newData.hasChildren(['name','totalGB','freeGB','usedPercent']) && $disk.matches(/^(0|[1-9]|[12][0-9]|3[01])$/)",
           "name": {
             ".validate": "newData.isString() && newData.val().length <= 20"
           },
@@ -78,17 +77,57 @@
           },
           "usedPercent": {
             ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
+          },
+          "$other": {
+            ".validate": false
           }
         }
       },
       "inventory": {
-        ".validate": "newData.numChildren() <= 14",
-        "$field": {
-          ".validate": "(newData.isString() && newData.val().length <= 12000) || newData.isNumber()"
+        "manufacturer": {
+          ".validate": "newData.isString() && newData.val().length <= 2000"
+        },
+        "model": {
+          ".validate": "newData.isString() && newData.val().length <= 2000"
+        },
+        "serial": {
+          ".validate": "newData.isString() && newData.val().length <= 2000"
+        },
+        "os": {
+          ".validate": "newData.isString() && newData.val().length <= 2000"
+        },
+        "cpuModel": {
+          ".validate": "newData.isString() && newData.val().length <= 2000"
+        },
+        "ip": {
+          ".validate": "newData.isString() && newData.val().length <= 2000"
+        },
+        "diskHealth": {
+          ".validate": "newData.isString() && newData.val().length <= 2000"
+        },
+        "antivirus": {
+          ".validate": "newData.isString() && newData.val().length <= 2000"
+        },
+        "adapters": {
+          ".validate": "newData.isString() && newData.val().length <= 2000"
+        },
+        "software": {
+          ".validate": "newData.isString() && newData.val().length <= 12000"
+        },
+        "at": {
+          ".validate": "newData.isNumber() && newData.val() >= 0"
+        },
+        "temperatureC": {
+          ".validate": "newData.isNumber() && newData.val() >= 0"
+        },
+        "batteryHealth": {
+          ".validate": "newData.isNumber() && newData.val() >= 0"
+        },
+        "$other": {
+          ".validate": false
         }
       },
       "network": {
-        ".validate": "newData.numChildren() <= 3",
         "$field": {
           ".validate": "($field === 'at' || $field === 'downloadMbps' || $field === 'uploadMbps') && newData.isNumber() && newData.val() >= 0"
         }
