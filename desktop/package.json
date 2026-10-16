@@ -1,0 +1,19 @@
+{
+  "name": "mountain-torq-it-helpdesk",
+  "version": "1.0.0",
+  "description": "Mountain Torq IT Helpdesk for Windows",
+  "author": "Mountain Torq",
+  "private": true,
+  "main": "main.cjs",
+  "scripts": { "start": "electron .", "dist": "electron-builder --win nsis --x64 --publish never" },
+  "devDependencies": { "electron": "44.7.2", "electron-builder": "26.15.3" },
+  "build": {
+    "appId": "com.mountaintorq.ithelpdesk",
+    "productName": "Mountain Torq IT Helpdesk",
+    "files": ["main.cjs", "preload.cjs", "icon.png", "offline.html"],
+    "directories": { "output": "release" },
+    "win": { "target": "nsis", "icon": "icon.ico", "artifactName": "Mountain-Torq-IT-Helpdesk-Setup-${version}.${ext}" },
+    "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true, "createDesktopShortcut": true, "createStartMenuShortcut": true },
+    "publish": null
+  }
+}

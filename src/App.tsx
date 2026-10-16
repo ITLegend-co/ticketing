@@ -1,3 +1,4 @@
+import { useDesktopNotifications } from "./use-desktop-notifications";
 import { appendReplyPhotos, pastedPhotos } from "./paste-photos";
 import { displayName } from "./display-name";
 import ReportDownload from "./ReportDownload";
@@ -20,9 +21,9 @@ type Profile = { id: string; name: string; email: string; role: Role; department
 type TicketItem = {
   id: string; subject: string; description: string; category: string; priority: Priority; status: Status;
   location: string; impact: string; requesterId: string; requester: string; department: string;
-  technicianId: string; technician: string; createdAt: number; updatedAt: number;
+  technicianId: string; technician: string; createdAt: number; updatedAt: number; updatedBy?: string;
   reviewedAt?: number; reviewedBy?: string;
-  updates?: Record<string, { text: string; author: string; createdAt: number }>;
+  updates?: Record<string, { text: string; author: string; authorId?: string; createdAt: number }>;
 };
 const operatorPortal = isOperatorPath(window.location.pathname);
 const statuses: Status[] = ["Open", "In Progress", "Pending", "Resolved"];
@@ -84,6 +85,7 @@ export default function App() {
   const [tickets, setTickets] = useState<TicketItem[]>([]);
   const [ticketsLoading, setTicketsLoading] = useState(true);
   const ticketsReady = useRef(false);
+  useDesktopNotifications(user?.uid || "", profile?.role || "", !!user && profile?.status === "Active" && operatorPortal, !ticketsLoading && ticketsReady.current, tickets);
   const [loadError, setLoadError] = useState("");
   const [page, setPage] = useState<"Dashboard" | "Tickets" | "Users">(operatorPortal ? "Dashboard" : "Tickets");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -132,6 +134,7 @@ export default function App() {
   }
   const [linkedTicket, setLinkedTicket] = useState(() => new URLSearchParams(window.location.search).get("ticket"));
   const [linkError, setLinkError] = useState("");
+  useEffect(() => window.mtDesktop?.onTicket(id => setLinkedTicket(id)), []);
   const [noteBusy, setNoteBusy] = useState(false);
   const noteSubmitting = useRef(false);
   const [deleteTarget, setDeleteTarget] = useState<TicketItem | null>(null);
@@ -251,6 +254,7 @@ export default function App() {
         notify("Choose a priority and an IT person before changing status."); return;
       }
       fields.updatedAt = Date.now();
+      fields.updatedBy = user.uid;
     }
     noteSubmitting.current = true; setNoteBusy(true); setReplyError(""); setReplyProgress("Saving reply…");
     try {

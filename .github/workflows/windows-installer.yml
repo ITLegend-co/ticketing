@@ -1,0 +1,48 @@
+name: Build Windows installer
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['desktop/**', '.github/workflows/windows-installer.yml']
+permissions:
+  contents: write
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Test notification routing
+        run: node --experimental-strip-types --test tests/desktop-notifications.test.mjs
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: npm ci
+      - name: Build installer
+        working-directory: desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx electron-builder --win nsis --x64 --publish never -c.extraMetadata.version=1.0.${{ github.run_number }}
+      - name: Verify installer and write checksum
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem desktop/release/*Setup*.exe | Select-Object -First 1
+          if (!$installer -or $installer.Length -lt 1000000) { throw 'Installer missing or incomplete' }
+          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash
+          "$hash  $($installer.Name)" | Out-File desktop/release/SHA256SUMS.txt -Encoding ascii
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Mountain-Torq-Windows-Installer
+          path: |
+            desktop/release/*Setup*.exe
+            desktop/release/SHA256SUMS.txt
+      - name: Publish installer release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $installer = (Get-ChildItem desktop/release/*Setup*.exe | Select-Object -First 1).FullName
+          gh release create "desktop-v1.0.${{ github.run_number }}" "$installer" desktop/release/SHA256SUMS.txt --target "${{ github.sha }}" --title "Windows Helpdesk 1.0.${{ github.run_number }}" --notes-file desktop/RELEASE-NOTES.md
