@@ -12,7 +12,7 @@ import { driveReady, driveRequest, DrivePhoto, MAX_PHOTOS, uploadPhoto, sendUser
 import { submitWithPhotos } from "./ticket-submission";
 import { canUpdateTicket, isOperatorPath, isStaffRole, portalLink } from "./portal";
 import { auth, database, generateTemporaryPassword, provisionUser, sendUserPasswordReset } from "./firebase";
-import { Check, ChevronDown, CircleAlert, Clock3, Filter, Headphones, LayoutDashboard, LogOut, Menu, Plus, Search, ShieldCheck, Ticket, UserPlus, Users, X } from "lucide-react";
+import { Check, ChevronDown, CircleAlert, Clock3, Download, Filter, Headphones, LayoutDashboard, LogOut, Menu, Plus, Search, ShieldCheck, Ticket, UserPlus, Users, X } from "lucide-react";
 
 type Role = "Employee" | "IT Technician" | "IT Admin" | "Management";
 type Status = "Open" | "In Progress" | "Pending" | "Resolved";
@@ -44,6 +44,15 @@ const issueMessage = (error: unknown) => {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
 };
 
+function WindowsDownload() {
+  if (window.mtDesktop) return null;
+  return <div className="windows-download">
+    <a className="secondary-btn" href="https://github.com/ITLegend-co/ticketing/releases/download/desktop-v1.0.4/Mountain-Torq-IT-Helpdesk-Setup-1.0.4.exe" target="_blank" rel="noopener noreferrer"><Download size={17} aria-hidden="true"/>Download for Windows</a>
+    <p>IT team desktop app · Windows 10/11 (64-bit)</p>
+    <small>Get ticket notifications while the app runs in your system tray.</small>
+  </div>;
+}
+
 function LoginScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -73,6 +82,7 @@ function LoginScreen() {
       {notice && <div className="auth-message success"><Check size={15} />{notice}</div>}
       <button className="primary-btn login-submit" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
     </form>
+    <WindowsDownload/>
   </section></main>;
 }
 
@@ -357,6 +367,7 @@ export default function App() {
           return <button key={name} className={`nav-item ${page === name ? "active" : ""}`} onClick={() => { setPage(name); setMenuOpen(false); }}><Icon size={18}/>{!operatorPortal && name === "Tickets" ? "My requests" : name}</button>;
         })}
       </nav>
+      {operatorPortal && <WindowsDownload/>}
       <div className="sidebar-user"><div className="avatar avatar-navy">{initials(displayName(profile.name))}</div><div><strong>{displayName(profile.name)}</strong><span>{profile.role}</span></div><button className="icon-btn" title="Sign out" aria-label="Sign out" onClick={() => signOut(auth)}><LogOut size={18}/></button></div>
     </aside>
     {menuOpen && <button className="sidebar-backdrop" aria-label="Close menu" onClick={() => setMenuOpen(false)}/>}
