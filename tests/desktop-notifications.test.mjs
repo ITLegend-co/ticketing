@@ -28,3 +28,19 @@ test('replies notify assignee, suppress own replies and unchanged snapshots',()=
   assert.equal(desktopChanges([assigned],[own],'tech','IT Technician').length,0);
   assert.equal(desktopChanges([assigned],[{...assigned,status:'Resolved',updatedBy:'tech'}],'tech','IT Technician').length,0);
 });
+
+test('normal staff receive only updates on their own requests, without self-notifications', () => {
+  const assigned = {...t, technicianId:'tech'};
+  const replied = {...assigned, updates:{a:{text:'Please restart',authorId:'tech',createdAt:1}}};
+  for (const role of ['Employee','Management']) {
+    assert.equal(desktopRecipient(assigned,'employee',role),true);
+    assert.equal(desktopRecipient(assigned,'someone-else',role),false);
+    assert.equal(desktopChanges(null,[replied],'employee',role).length,0);
+    assert.equal(desktopChanges([],[t],'employee',role).length,0);
+    assert.equal(desktopChanges([assigned],[replied],'employee',role)[0].title,'New ticket reply');
+    assert.equal(desktopChanges([assigned],[replied],'someone-else',role).length,0);
+    assert.equal(desktopChanges([assigned],[{...assigned,status:'Resolved',updatedBy:'tech'}],'employee',role).length,1);
+    assert.equal(desktopChanges([assigned],[{...assigned,updates:{a:{text:'Thanks',authorId:'employee',createdAt:1}}}],'employee',role).length,0);
+  }
+  assert.equal(desktopRecipient(assigned,'employee','Unknown'),false);
+});

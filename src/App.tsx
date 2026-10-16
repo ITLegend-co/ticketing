@@ -48,7 +48,7 @@ function WindowsDownload() {
   if (window.mtDesktop) return null;
   return <div className="windows-download">
     <a className="secondary-btn" href="https://github.com/ITLegend-co/ticketing/releases/download/desktop-v1.0.7/Mountain-Torq-IT-Helpdesk-Setup-1.0.7.exe" target="_blank" rel="noopener noreferrer"><Download size={17} aria-hidden="true"/>Download for Windows</a>
-    <p>IT team desktop app · Windows 10/11 (64-bit)</p>
+    <p>Desktop app for all staff · Windows 10/11 (64-bit)</p>
     <small>Get a separate popup with ticket updates and an Open ticket button.</small>
   </div>;
 }
@@ -95,7 +95,7 @@ export default function App() {
   const [tickets, setTickets] = useState<TicketItem[]>([]);
   const [ticketsLoading, setTicketsLoading] = useState(true);
   const ticketsReady = useRef(false);
-  useDesktopNotifications(user?.uid || "", profile?.role || "", !!user && profile?.status === "Active" && operatorPortal, !ticketsLoading && ticketsReady.current, tickets);
+  useDesktopNotifications(user?.uid || "", profile?.role || "", !!user && profile?.status === "Active", !ticketsLoading && ticketsReady.current, tickets);
   const [loadError, setLoadError] = useState("");
   const [page, setPage] = useState<"Dashboard" | "Tickets" | "Users">(operatorPortal ? "Dashboard" : "Tickets");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -172,6 +172,17 @@ export default function App() {
       setProfile(snapshot.exists() ? { id: user.uid, ...snapshot.val() } : null); setProfileLoading(false);
     }, (error) => { setProfile(null); setProfileLoading(false); setLoadError(issueMessage(error)); });
   }, [user]);
+  useEffect(() => {
+    if (!window.mtDesktop || !user || !profile || profile.status !== "Active") return;
+    if (operatorPortal !== isStaffRole(profile.role)) {
+      const destination = new URL(portalLink(import.meta.env.BASE_URL, window.location.origin, profile.role, ""));
+      destination.searchParams.delete("email");
+      const ticketId = new URLSearchParams(window.location.search).get("ticket");
+      if (ticketId) destination.searchParams.set("ticket", ticketId);
+      window.location.replace(destination.href);
+    }
+  }, [user, profile?.role, profile?.status]);
+
   useEffect(() => {
     if (!user || !profile || profile.status !== "Active") { setTickets([]); setTicketsLoading(false); return; }
     ticketsReady.current = false;
@@ -367,7 +378,7 @@ export default function App() {
           return <button key={name} className={`nav-item ${page === name ? "active" : ""}`} onClick={() => { setPage(name); setMenuOpen(false); }}><Icon size={18}/>{!operatorPortal && name === "Tickets" ? "My requests" : name}</button>;
         })}
       </nav>
-      {operatorPortal && <WindowsDownload/>}
+      <WindowsDownload/>
       <div className="sidebar-user"><div className="avatar avatar-navy">{initials(displayName(profile.name))}</div><div><strong>{displayName(profile.name)}</strong><span>{profile.role}</span></div><button className="icon-btn" title="Sign out" aria-label="Sign out" onClick={() => signOut(auth)}><LogOut size={18}/></button></div>
     </aside>
     {menuOpen && <button className="sidebar-backdrop" aria-label="Close menu" onClick={() => setMenuOpen(false)}/>}

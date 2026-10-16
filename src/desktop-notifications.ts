@@ -4,6 +4,7 @@ export type DesktopTicket = {
   updates?: Record<string, { text: string; authorId?: string; createdAt: number }>;
 };
 export function desktopRecipient(ticket: DesktopTicket, uid: string, role: string) {
+  if (role === "Employee" || role === "Management") return !!uid && ticket.requesterId === uid;
   if (role !== "IT Admin" && role !== "IT Technician") return false;
   return ticket.technicianId ? ticket.technicianId === uid : role === "IT Admin";
 }
