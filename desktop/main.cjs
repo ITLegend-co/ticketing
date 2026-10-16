@@ -94,7 +94,7 @@ else {
           const ok = await win.webContents.executeJavaScript('typeof window.mtDesktop?.notify === "function" && !!document.querySelector("#root")');
           diagnostic('Bridge check: ' + ok);
           if (!ok) { app.exit(3); return; }
-          await win.webContents.executeJavaScript('window.mtDesktop.onTicket(id => { window.__smokeTicket = id; })');
+          await win.webContents.executeJavaScript('window.mtDesktop.onTicket(id => { window.__smokeTicket = id; }); true');
           account = 'smoke-user'; allowed = new Set(['smoke-ticket']);
           await require('./popup-smoke.cjs')(popups, diagnostic);
           const opened = await win.webContents.executeJavaScript('window.__smokeTicket === "smoke-ticket"');
