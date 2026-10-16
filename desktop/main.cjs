@@ -1,5 +1,16 @@
 const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, shell, nativeImage } = require('electron');
 const path = require('node:path');
+const fs = require('node:fs');
+const smoke = process.argv.includes('--smoke-test');
+function diagnostic(message) {
+  if (smoke && process.env.MT_SMOKE_LOG) fs.appendFileSync(process.env.MT_SMOKE_LOG, String(message) + '\n');
+}
+if (smoke) {
+  diagnostic('Main process started');
+  process.on('uncaughtException', error => { diagnostic(error.stack); app.exit(5); });
+  process.on('unhandledRejection', error => { diagnostic(error?.stack || error); app.exit(6); });
+  setTimeout(() => { diagnostic('Startup timeout'); app.exit(2); }, 60000);
+}
 const HOME = 'https://itlegend-co.github.io/ticketing/askjaslhrui3893478rehfsj38uhef/';
 const APP_ID = 'com.mountaintorq.ithelpdesk';
 let win, tray, quitting = false, allowed = new Set(), account = '', retryTimer;
@@ -28,10 +39,12 @@ else {
   app.on('before-quit', () => { quitting = true; clearTimeout(retryTimer); clearNotices(); });
   app.on('window-all-closed', () => {});
   app.whenReady().then(() => {
+    diagnostic('Electron ready');
     const icon = path.join(__dirname, 'icon.png');
     win = new BrowserWindow({ width: 1280, height: 850, minWidth: 700, minHeight: 540, title: 'Mountain Torq IT Helpdesk', icon,
       show: !process.argv.includes('--hidden'), autoHideMenuBar: true,
       webPreferences: { preload: path.join(__dirname, 'preload.cjs'), nodeIntegration: false, contextIsolation: true, sandbox: true, backgroundThrottling: false, webSecurity: true } });
+    diagnostic('Window created');
     win.on('close', event => { if (!quitting) { event.preventDefault(); win.hide(); } });
     win.webContents.setWindowOpenHandler(({ url }) => {
       if (trusted(url)) win.loadURL(url).catch(() => {});
@@ -49,6 +62,7 @@ else {
       clearTimeout(retryTimer); retryTimer = setTimeout(load, 15000);
     });
     win.webContents.on('render-process-gone', () => { if (!quitting) { clearNotices(); retryTimer = setTimeout(load, 3000); } });
+    diagnostic('Creating tray');
     tray = new Tray(nativeImage.createFromPath(icon)); tray.setToolTip('Mountain Torq IT Helpdesk — running'); tray.on('double-click', show); trayMenu();
     ipcMain.on('mt-access', (event, data) => {
       if (!senderOK(event) || !data || typeof data.uid !== 'string' || !Array.isArray(data.ticketIds) || data.ticketIds.length > 20000) return;
@@ -67,16 +81,18 @@ else {
       n.on('close', () => { if (notices.get(id) === n) notices.delete(id); });
       n.show();
     });
-    if (process.argv.includes('--smoke-test')) {
+    if (smoke) {
       const timeout = setTimeout(() => app.exit(2), 60000);
       win.webContents.on('did-finish-load', async () => {
+        diagnostic('Loaded ' + win.webContents.getURL());
         if (!trusted(win.webContents.getURL())) return;
         try {
           const ok = await win.webContents.executeJavaScript('typeof window.mtDesktop?.notify === "function" && !!document.querySelector("#root")');
-          clearTimeout(timeout); app.exit(ok ? 0 : 3);
+          diagnostic('Bridge check: ' + ok); clearTimeout(timeout); app.exit(ok ? 0 : 3);
         } catch { clearTimeout(timeout); app.exit(4); }
       });
     }
+    diagnostic('Loading helpdesk');
     load();
   });
 }

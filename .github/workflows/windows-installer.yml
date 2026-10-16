@@ -32,8 +32,11 @@ jobs:
         shell: pwsh
         run: |
           $app = (Get-ChildItem 'desktop/release/win-unpacked/Mountain Torq IT Helpdesk.exe').FullName
+          $env:MT_SMOKE_LOG = Join-Path $env:RUNNER_TEMP 'mt-smoke.log'
           $process = Start-Process -FilePath $app -ArgumentList '--smoke-test' -PassThru
-          if (!$process.WaitForExit(90000)) { $process.Kill(); throw 'App launch test timed out' }
+          $finished = $process.WaitForExit(90000)
+          if (Test-Path $env:MT_SMOKE_LOG) { Get-Content $env:MT_SMOKE_LOG }
+          if (!$finished) { $process.Kill(); throw 'App launch test timed out' }
           if ($process.ExitCode -ne 0) { throw "App launch test failed: $($process.ExitCode)" }
       - name: Verify installer and write checksum
         shell: pwsh
