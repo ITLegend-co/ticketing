@@ -75,6 +75,7 @@ else {
     diagnostic('Creating tray');
     tray = new Tray(nativeImage.createFromPath(icon)); tray.setToolTip('Mountain Torq IT Helpdesk — running'); tray.on('double-click', show); trayMenu();
     ipcMain.on('mt-access', (event, data) => {
+      if (smoke) return; // The launch check owns a synthetic account; no live authentication fixture.
       if (!senderOK(event) || !data || typeof data.uid !== 'string' || !Array.isArray(data.ticketIds) || data.ticketIds.length > 20000) return;
       if (account !== data.uid) clearNotices();
       account = data.uid; allowed = new Set(data.ticketIds.filter(id => typeof id === 'string' && /^[\w-]{1,120}$/.test(id)));
