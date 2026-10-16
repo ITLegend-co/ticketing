@@ -47,9 +47,9 @@ const issueMessage = (error: unknown) => {
 function WindowsDownload() {
   if (window.mtDesktop) return null;
   return <div className="windows-download">
-    <a className="secondary-btn" href="https://github.com/ITLegend-co/ticketing/releases/download/desktop-v1.0.4/Mountain-Torq-IT-Helpdesk-Setup-1.0.4.exe" target="_blank" rel="noopener noreferrer"><Download size={17} aria-hidden="true"/>Download for Windows</a>
+    <a className="secondary-btn" href="https://github.com/ITLegend-co/ticketing/releases/download/desktop-v1.0.7/Mountain-Torq-IT-Helpdesk-Setup-1.0.7.exe" target="_blank" rel="noopener noreferrer"><Download size={17} aria-hidden="true"/>Download for Windows</a>
     <p>IT team desktop app · Windows 10/11 (64-bit)</p>
-    <small>Get ticket notifications while the app runs in your system tray.</small>
+    <small>Get a separate popup with ticket updates and an Open ticket button.</small>
   </div>;
 }
 
