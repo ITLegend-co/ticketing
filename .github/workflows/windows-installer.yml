@@ -7,7 +7,21 @@ on:
 permissions:
   contents: write
 jobs:
+  monitoring-rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Verify real Firebase rule enforcement in isolated emulators
+        run: npx --yes firebase-tools emulators:exec --project demo-mtmonitor --config firebase.monitoring-tests.json --only auth,database "node tests/monitoring-emulator.mjs"
   windows:
+    needs: monitoring-rules
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,6 +35,15 @@ jobs:
       - name: Install desktop dependencies
         working-directory: desktop
         run: npm ci
+      - name: Test Windows collector (no upload)
+        shell: powershell
+        run: ./desktop/monitoring/Collect.ps1 -Test
+      - name: Validate setup script
+        shell: powershell
+        run: |
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path desktop/monitoring/Setup.ps1), [ref]$null, [ref]$errors) | Out-Null
+          if ($errors.Count) { throw ($errors | Out-String) }
       - name: Build installer
         working-directory: desktop
         env:

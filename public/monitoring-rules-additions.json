@@ -1,0 +1,122 @@
+{
+  "monitoringDevices": {
+    ".read": "auth != null && root.child('users').child(auth.uid).child('status').val() === 'Active' && (root.child('users').child(auth.uid).child('role').val() === 'IT Admin' || root.child('users').child(auth.uid).child('role').val() === 'IT Technician' || root.child('users').child(auth.uid).child('role').val() === 'Management')",
+    "$device": {
+      ".read": "auth != null && auth.uid === $device",
+      ".write": "auth != null && root.child('users').child(auth.uid).child('status').val() === 'Active' && root.child('users').child(auth.uid).child('role').val() === 'IT Admin'",
+      ".validate": "newData.hasChildren(['name','location','department','active','createdAt','enrolledBy','speedTests'])",
+      "name": {
+        ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100"
+      },
+      "location": {
+        ".validate": "newData.isString() && newData.val().length <= 80"
+      },
+      "department": {
+        ".validate": "newData.isString() && newData.val().length <= 80"
+      },
+      "active": {
+        ".validate": "newData.isBoolean()"
+      },
+      "speedTests": {
+        ".validate": "newData.isBoolean()"
+      },
+      "createdAt": {
+        ".validate": "newData.isNumber() && (!data.exists() || newData.val() === data.val())"
+      },
+      "enrolledBy": {
+        ".validate": "newData.isString() && (data.exists() ? newData.val() === data.val() : newData.val() === auth.uid)"
+      },
+      "$other": {
+        ".validate": false
+      }
+    }
+  },
+  "monitoringCurrent": {
+    ".read": "auth != null && root.child('users').child(auth.uid).child('status').val() === 'Active' && (root.child('users').child(auth.uid).child('role').val() === 'IT Admin' || root.child('users').child(auth.uid).child('role').val() === 'IT Technician' || root.child('users').child(auth.uid).child('role').val() === 'Management')",
+    "$device": {
+      ".write": "auth != null && auth.uid === $device && root.child('monitoringDevices').child($device).child('active').val() === true && newData.exists()",
+      ".validate": "newData.hasChildren(['at','cpu','memory'])",
+      "at": {
+        ".validate": "newData.isNumber() && newData.val() >= now - 600000 && newData.val() <= now + 60000"
+      },
+      "cpu": {
+        ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
+      },
+      "memory": {
+        ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
+      },
+      "hostname": {
+        ".validate": "newData.isString() && newData.val().length <= 2000"
+      },
+      "user": {
+        ".validate": "newData.isString() && newData.val().length <= 2000"
+      },
+      "memoryGB": {
+        ".validate": "newData.isNumber() && newData.val() >= 0"
+      },
+      "uptimeHours": {
+        ".validate": "newData.isNumber() && newData.val() >= 0"
+      },
+      "pingMs": {
+        ".validate": "newData.isNumber() && newData.val() >= 0"
+      },
+      "rebootPending": {
+        ".validate": "newData.isBoolean()"
+      },
+      "disks": {
+        ".validate": "newData.numChildren() <= 32",
+        "$disk": {
+          ".validate": "newData.hasChildren(['name','totalGB','freeGB','usedPercent']) && newData.numChildren() === 4",
+          "name": {
+            ".validate": "newData.isString() && newData.val().length <= 20"
+          },
+          "totalGB": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+          "freeGB": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+          "usedPercent": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
+          }
+        }
+      },
+      "inventory": {
+        ".validate": "newData.numChildren() <= 14",
+        "$field": {
+          ".validate": "(newData.isString() && newData.val().length <= 12000) || newData.isNumber()"
+        }
+      },
+      "network": {
+        ".validate": "newData.numChildren() <= 3",
+        "$field": {
+          ".validate": "($field === 'at' || $field === 'downloadMbps' || $field === 'uploadMbps') && newData.isNumber() && newData.val() >= 0"
+        }
+      },
+      "$other": {
+        ".validate": false
+      }
+    }
+  },
+  "monitoringHistory": {
+    ".read": "auth != null && root.child('users').child(auth.uid).child('status').val() === 'Active' && (root.child('users').child(auth.uid).child('role').val() === 'IT Admin' || root.child('users').child(auth.uid).child('role').val() === 'IT Technician' || root.child('users').child(auth.uid).child('role').val() === 'Management')",
+    "$device": {
+      "$slot": {
+        ".write": "auth != null && auth.uid === $device && root.child('monitoringDevices').child($device).child('active').val() === true && newData.exists()",
+        ".validate": "newData.hasChildren(['at','cpu','memory']) && $slot.matches(/^(0|[1-9][0-9]?|1[0-9]{2}|2[0-7][0-9]|28[0-7])$/)",
+        "at": {
+          ".validate": "newData.isNumber() && newData.val() >= now - 600000 && newData.val() <= now + 60000"
+        },
+        "cpu": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
+        },
+        "memory": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    }
+  }
+}

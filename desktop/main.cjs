@@ -37,7 +37,9 @@ function trayMenu() {
     { label: 'Open helpdesk', click: show },
     { label: 'Start with Windows', type: 'checkbox', checked: app.getLoginItemSettings({ args: ['--hidden'] }).openAtLogin,
       click: item => { app.setLoginItemSettings({ openAtLogin: item.checked, args: ['--hidden'] }); trayMenu(); } },
-    { label: 'Reload / reconnect', click: load },
+    { label: 'Reload / reconnect', click: () => win.webContents.reloadIgnoringCache() },
+    { label: 'Set up device monitoring', click: () => require('./monitoring-launch.cjs')() },
+    { label: 'Remove device monitoring', click: () => require('./monitoring-launch.cjs')(true) },
     { type: 'separator' },
     { label: 'Quit (stop notifications)', click: () => app.quit() },
   ]));

@@ -11,3 +11,5 @@ The installer is not code-signed; Windows may show an unknown-publisher warning.
 No Firebase rules or Apps Script update is needed for desktop notifications. Website features update through the existing hosted helpdesk; desktop runtime updates require installing a newer installer.
 
 Upgrading: quit the existing app from the system tray, then run the new installer. Your existing account and tickets are unchanged.
+
+Device Monitoring: included optional background collector with setup/removal actions in the system tray. Requires a device enrollment file from IT Admin, Windows administrator approval and publishing the new Firebase rules first. See the website monitoring setup page. Monitoring runs through a separate Windows scheduled task and sends no emails.
