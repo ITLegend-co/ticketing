@@ -18,7 +18,13 @@ const notices = new Map();
 function trusted(url) {
   try { const u = new URL(url); return u.origin === 'https://itlegend-co.github.io' && u.pathname.startsWith('/ticketing/'); } catch { return false; }
 }
-function senderOK(event) { return win && event.sender === win.webContents && event.senderFrame === win.webContents.mainFrame && trusted(event.senderFrame.url); }
+function senderOK(event) {
+  if (quitting || !win || win.isDestroyed() || event.sender.isDestroyed()) return false;
+  try {
+    const frame = event.senderFrame;
+    return event.sender === win.webContents && frame && frame === win.webContents.mainFrame && trusted(frame.url);
+  } catch { return false; } // A renderer frame can disappear while a queued message is delivered.
+}
 function clearNotices() { for (const n of notices.values()) n.close(); notices.clear(); }
 function show() { if (!win) return; if (win.isMinimized()) win.restore(); win.show(); win.focus(); }
 function load() { if (win && !win.isDestroyed()) win.loadURL(HOME).catch(() => {}); }
