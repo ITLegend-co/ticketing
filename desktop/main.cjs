@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, shell, nativeImage } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, shell, nativeImage } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const smoke = process.argv.includes('--smoke-test');
@@ -14,7 +14,11 @@ if (smoke) {
 const HOME = 'https://itlegend-co.github.io/ticketing/askjaslhrui3893478rehfsj38uhef/';
 const APP_ID = 'com.mountaintorq.ithelpdesk';
 let win, tray, quitting = false, allowed = new Set(), account = '', retryTimer;
-const notices = new Map();
+const popups = require('./popup.cjs')((id, owner) => {
+  if (!quitting && account === owner && allowed.has(id) && win && !win.isDestroyed()) {
+    show(); win.webContents.send('mt-ticket', id);
+  }
+});
 function trusted(url) {
   try { const u = new URL(url); return u.origin === 'https://itlegend-co.github.io' && u.pathname.startsWith('/ticketing/'); } catch { return false; }
 }
@@ -25,7 +29,7 @@ function senderOK(event) {
     return event.sender === win.webContents && frame && frame === win.webContents.mainFrame && trusted(frame.url);
   } catch { return false; } // A renderer frame can disappear while a queued message is delivered.
 }
-function clearNotices() { for (const n of notices.values()) n.close(); notices.clear(); }
+function clearNotices() { popups.clear(); }
 function show() { if (!win) return; if (win.isMinimized()) win.restore(); win.show(); win.focus(); }
 function load() { if (win && !win.isDestroyed()) win.loadURL(HOME).catch(() => {}); }
 function trayMenu() {
@@ -74,18 +78,12 @@ else {
       if (!senderOK(event) || !data || typeof data.uid !== 'string' || !Array.isArray(data.ticketIds) || data.ticketIds.length > 20000) return;
       if (account !== data.uid) clearNotices();
       account = data.uid; allowed = new Set(data.ticketIds.filter(id => typeof id === 'string' && /^[\w-]{1,120}$/.test(id)));
-      for (const [id, notice] of notices) if (!allowed.has(id)) { notice.close(); notices.delete(id); }
+      popups.sync(account, allowed);
     });
     ipcMain.on('mt-notify', (event, notice) => {
-      if (!senderOK(event) || !account || !notice || !allowed.has(notice.ticketId) || !Notification.isSupported()) return;
+      if (!senderOK(event) || !account || !notice || !allowed.has(notice.ticketId)) return;
       if (typeof notice.title !== 'string' || typeof notice.body !== 'string') return;
-      const id = notice.ticketId, owner = account;
-      notices.get(id)?.close();
-      const n = new Notification({ title: notice.title.slice(0,100), body: notice.body.slice(0,250), icon });
-      notices.set(id, n);
-      n.on('click', () => { if (account === owner && allowed.has(id)) { show(); win.webContents.send('mt-ticket', id); } });
-      n.on('close', () => { if (notices.get(id) === n) notices.delete(id); });
-      n.show();
+      popups.push({ ticketId: notice.ticketId, owner: account, title: notice.title.slice(0,100), body: notice.body.slice(0,500) });
     });
     if (smoke) {
       const timeout = setTimeout(() => app.exit(2), 60000);
@@ -94,8 +92,16 @@ else {
         if (!trusted(win.webContents.getURL())) return;
         try {
           const ok = await win.webContents.executeJavaScript('typeof window.mtDesktop?.notify === "function" && !!document.querySelector("#root")');
-          diagnostic('Bridge check: ' + ok); clearTimeout(timeout); app.exit(ok ? 0 : 3);
-        } catch { clearTimeout(timeout); app.exit(4); }
+          diagnostic('Bridge check: ' + ok);
+          if (!ok) { app.exit(3); return; }
+          await win.webContents.executeJavaScript('window.mtDesktop.onTicket(id => { window.__smokeTicket = id; })');
+          account = 'smoke-user'; allowed = new Set(['smoke-ticket']);
+          await require('./popup-smoke.cjs')(popups, diagnostic);
+          const opened = await win.webContents.executeJavaScript('window.__smokeTicket === "smoke-ticket"');
+          if (!opened) throw new Error('Popup did not open its ticket');
+          diagnostic('Open ticket routed to helpdesk');
+          clearTimeout(timeout); app.exit(0);
+        } catch (error) { diagnostic(error.stack); clearTimeout(timeout); app.exit(4); }
       });
     }
     diagnostic('Loading helpdesk');

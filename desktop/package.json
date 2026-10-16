@@ -10,7 +10,7 @@
   "build": {
     "appId": "com.mountaintorq.ithelpdesk",
     "productName": "Mountain Torq IT Helpdesk",
-    "files": ["main.cjs", "preload.cjs", "icon.png", "offline.html"],
+    "files": ["main.cjs", "preload.cjs", "icon.png", "offline.html", "popup.cjs", "popup-preload.cjs", "popup.html", "popup.css", "popup.js", "popup-smoke.cjs"],
     "directories": { "output": "release" },
     "win": { "target": "nsis", "icon": "icon.ico", "artifactName": "Mountain-Torq-IT-Helpdesk-Setup-${version}.${ext}" },
     "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true, "createDesktopShortcut": true, "createStartMenuShortcut": true },

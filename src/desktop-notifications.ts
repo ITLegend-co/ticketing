@@ -14,6 +14,7 @@ export function desktopChanges(previous: DesktopTicket[] | null, current: Deskto
     if (!desktopRecipient(ticket, uid, role)) return [];
     const before = old.get(ticket.id);
     let title = "";
+    let detail = "";
     if (!before) {
       if (ticket.technicianId === uid) title = "Ticket assigned to you";
       else if (ticket.requesterId !== uid) title = "New support ticket";
@@ -22,9 +23,12 @@ export function desktopChanges(previous: DesktopTicket[] | null, current: Deskto
     } else {
       const replies = Object.entries(ticket.updates || {}).filter(([id, note]) => !before.updates?.[id] && note.authorId !== uid);
       const fieldsChanged = before.status !== ticket.status || before.priority !== ticket.priority;
-      if (replies.length) title = "New ticket reply";
+      if (replies.length) {
+        title = "New ticket reply";
+        detail = replies.sort((a, b) => b[1].createdAt - a[1].createdAt)[0][1].text.slice(0, 250);
+      }
       else if (fieldsChanged && ticket.updatedBy !== uid) title = "Ticket updated";
     }
-    return title ? [{ ticketId: ticket.id, title, body: `${ticket.subject} · ${ticket.status}` }] : [];
+    return title ? [{ ticketId: ticket.id, title, body: `${ticket.subject} · ${ticket.status} · ${ticket.priority}${detail ? "\n" + detail : ""}` }] : [];
   });
 }
