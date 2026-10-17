@@ -65,7 +65,7 @@
     "monitoringCurrent": {
       ".read": "auth != null && root.child('users').child(auth.uid).child('status').val() === 'Active' && (root.child('users').child(auth.uid).child('role').val() === 'IT Admin' || root.child('users').child(auth.uid).child('role').val() === 'IT Technician' || root.child('users').child(auth.uid).child('role').val() === 'Management')",
       "$device": {
-        ".write": "auth != null && auth.uid === $device && root.child('monitoringDevices').child($device).child('active').val() === true && newData.exists()",
+        ".write": "(auth != null && auth.uid === $device && root.child('monitoringDevices').child($device).child('active').val() === true && newData.exists()) || (auth != null && root.child('users').child(auth.uid).child('status').val() === 'Active' && root.child('users').child(auth.uid).child('role').val() === 'IT Admin' && !newData.exists())",
         ".validate": "newData.hasChildren(['at','cpu','memory'])",
         "at": {
           ".validate": "newData.isNumber() && newData.val() >= now - 600000 && newData.val() <= now + 60000"
@@ -220,7 +220,8 @@
           "$other": {
             ".validate": false
           }
-        }
+        },
+        ".write": "auth != null && root.child('users').child(auth.uid).child('status').val() === 'Active' && root.child('users').child(auth.uid).child('role').val() === 'IT Admin' && !newData.exists()"
       }
     }
   }

@@ -38,9 +38,31 @@ assert.equal((await db('PATCH','monitoringDevices/'+device.uid,{active:false},ad
 assert.equal((await db('PUT','monitoringCurrent/'+device.uid,reading,device.token)).status,401);
 await db('PATCH','users/'+management.uid,{status:'Suspended'},null,true);
 assert.equal((await db('GET','monitoringCurrent',undefined,management.token)).status,401);
-console.log('Firebase emulator passed: role access, device isolation, revocation, validation and ticket separation.');
+
 
 assert.equal((await db('PATCH','monitoringDevices/'+device.uid,{active:true},admin.token)).status,200);
 assert.equal((await db('PATCH','monitoringCurrent/'+device.uid,{addressInfo:{...addressInfo,publicIPv4:'x'.repeat(16)}},device.token)).status,401);
 assert.equal((await db('PATCH','monitoringCurrent/'+device.uid,{addressInfo:{publicIPv4:'',publicIPv6:'',checkedAt:at}},device.token)).status,200);
 assert.equal((await db('PATCH','monitoringCurrent/'+device.uid,{addressInfo:{publicIP:'203.0.113.5',checkedAt:at}},device.token)).status,200);
+
+// Delete is one atomic operation. Denied callers cannot partially delete a device.
+const removal={['monitoringDevices/'+device.uid]:null,['monitoringCurrent/'+device.uid]:null,['monitoringHistory/'+device.uid]:null};
+await db('PATCH','users/'+management.uid,{status:'Active'},null,true);
+for(const person of [employee,tech,management,device]) {
+ assert.equal((await db('PATCH','',removal,person.token)).status,401);
+ assert.ok(await (await db('GET','monitoringDevices/'+device.uid,undefined,admin.token)).json());
+}
+await db('PATCH','users/'+admin.uid,{status:'Suspended'},null,true);
+assert.equal((await db('PATCH','',removal,admin.token)).status,401);
+await db('PATCH','users/'+admin.uid,{status:'Active'},null,true);
+assert.equal((await db('PUT','monitoringCurrent/'+device.uid,reading,admin.token)).status,401);
+assert.equal((await db('PUT','monitoringHistory/'+device.uid+'/0',{at,cpu:10,memory:10},admin.token)).status,401);
+await db('PUT','monitoringDevices/'+other.uid,registry,admin.token);
+assert.equal((await db('PATCH','',removal,admin.token)).status,200);
+for(const node of ['monitoringDevices','monitoringCurrent','monitoringHistory']) {
+ assert.equal(await (await db('GET',node+'/'+device.uid,undefined,admin.token)).json(),null);
+}
+assert.ok(await (await db('GET','monitoringDevices/'+other.uid,undefined,admin.token)).json());
+assert.equal((await db('PUT','monitoringCurrent/'+device.uid,reading,device.token)).status,401);
+assert.equal((await db('PUT','monitoringHistory/'+device.uid+'/0',{at,cpu:10,memory:10},device.token)).status,401);
+console.log('Firebase emulator passed: role access, device isolation, revocation, atomic deletion, validation and ticket separation.');

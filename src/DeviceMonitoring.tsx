@@ -22,6 +22,8 @@ export default function DeviceMonitoring({ role }: { role: string }) {
   const [now, setNow] = useState(Date.now());
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
+  const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [config, setConfig] = useState<object | null>(null);
   const canView = canViewMonitoring(role);
@@ -67,12 +69,30 @@ export default function DeviceMonitoring({ role }: { role: string }) {
     } catch (e) { setError(e instanceof Error ? e.message : "Device enrollment failed."); }
     finally { if (app) await deleteApp(app).catch(() => {}); setBusy(false); }
   }
+  async function deleteDevice() {
+    if (role !== "IT Admin" || !selected || deleting) return;
+    const id = selected, name = devices[id]?.name || "this device";
+    if (!confirm('Permanently delete "' + name + '" and all its monitoring readings and history? This cannot be undone. Uploads from this enrollment will be blocked. To remove the task from the PC, use Remove device monitoring in its tray menu.')) return;
+    setDeleting(true); setError(""); setNotice("");
+    try {
+      await update(ref(database), {
+        ["monitoringDevices/" + id]: null,
+        ["monitoringCurrent/" + id]: null,
+        ["monitoringHistory/" + id]: null,
+      });
+      setSelected(""); setHistory([]); setConfig(null);
+      setNotice('Deleted "' + name + '" and its monitoring records. That enrollment can no longer upload.');
+    } catch {
+      setError("Could not delete the device. Check your connection and active IT Admin access, and publish the latest monitoring rules. No partial deletion was applied.");
+    } finally { setDeleting(false); }
+  }
   const list = Object.entries(devices).filter(([id,d]) => [d.name,d.location,d.department,readings[id]?.hostname].join(" ").toLowerCase().includes(search.toLowerCase()));
   const reading = readings[selected], device = devices[selected];
   const recent = history.filter(p => now - p.at < 86400000);
   const online = Object.entries(devices).filter(([id,d]) => d.active && deviceOnline(readings[id],now)).length;
   return <div className="monitoring">
     <div className="monitor-summary"><span><strong>{Object.keys(devices).length}</strong> enrolled</span><span><strong>{online}</strong> online</span><span><strong>{Object.entries(devices).filter(([id,d]) => d.active && readings[id] && deviceAlerts(readings[id],now).length).length}</strong> need attention</span></div>
+    {notice && <p role="status">{notice}</p>}
     {error && <div className="auth-message error" role="alert">{error} {role === "IT Admin" && <a href={import.meta.env.BASE_URL + "monitoring-setup.html"} target="_blank" rel="noreferrer">Setup instructions</a>}</div>}
     <section className="panel monitor-panel">
       <div className="panel-heading"><h2>Company computers</h2><input aria-label="Search computers" placeholder="Name, location or department" value={search} onChange={e=>setSearch(e.target.value)}/></div>
@@ -96,7 +116,7 @@ export default function DeviceMonitoring({ role }: { role: string }) {
         <div className="monitor-charts">{(["cpu","memory"] as const).map(metric=><div key={metric}><strong>{metric==="cpu" ? "CPU" : "RAM"} usage · 0–100%</strong>{recent.length ? <svg viewBox="0 0 600 120" role="img" aria-label={metric+" usage over the last 24 hours"}><line x1="0" x2="600" y1="110" y2="110" stroke="#cbd5e1"/>{recent.map(p=><circle key={p.at} cx={Math.max(0,600*(p.at-(now-86400000))/86400000)} cy={110-Math.min(100,Math.max(0,p[metric]))} r="2.5" fill={metric==="cpu" ? "#087e82":"#6751b9"}/>)}</svg> : <p>No history yet.</p>}</div>)}</div>
         <details><summary>Installed software (machine-wide)</summary><pre>{reading.inventory?.software || "Unavailable"}</pre></details>
       </> : <p>Awaiting the first report from this computer.</p>}
-      {role==="IT Admin" && <div className="monitor-actions"><label><input type="checkbox" checked={!!device.speedTests} onChange={async e=>{try{await update(ref(database,"monitoringDevices/"+selected),{speedTests:e.target.checked});}catch{setError("Could not update speed-test setting.");}}}/> Enable hourly network transfer samples</label><button className="secondary-btn" onClick={async()=>{if(!confirm(device.active ? "Stop accepting monitoring reports from this computer?" : "Allow this device to report again?"))return;try{await update(ref(database,"monitoringDevices/"+selected),{active:!device.active});}catch{setError("Could not change device access.");}}}>{device.active ? "Revoke monitoring access" : "Restore monitoring access"}</button></div>}
+      {role==="IT Admin" && <div className="monitor-actions"><label><input type="checkbox" checked={!!device.speedTests} onChange={async e=>{try{await update(ref(database,"monitoringDevices/"+selected),{speedTests:e.target.checked});}catch{setError("Could not update speed-test setting.");}}}/> Enable hourly network transfer samples</label><button className="secondary-btn" onClick={async()=>{if(!confirm(device.active ? "Stop accepting monitoring reports from this computer?" : "Allow this device to report again?"))return;try{await update(ref(database,"monitoringDevices/"+selected),{active:!device.active});}catch{setError("Could not change device access.");}}}>{device.active ? "Revoke monitoring access" : "Restore monitoring access"}</button><button className="secondary-btn monitor-delete" disabled={deleting} onClick={deleteDevice}>{deleting ? "Deleting…" : "Delete device"}</button></div>}
     </section>}
     {role==="IT Admin" && <section className="panel monitor-panel"><h2>Enrol a computer</h2><p>Create one device file per computer. In the Windows app, right-click the tray icon → Set up device monitoring, then select the file. Windows administrator permission is required.</p>
       <form className="monitor-enroll" onSubmit={enroll}><label>Computer label<input name="name" required maxLength={100} placeholder="KK Office — Accounts PC"/></label><label>Location<input name="location" required maxLength={80} placeholder="KK / KP / PH"/></label><label>Department<input name="department" required maxLength={80}/></label><label><input name="speed" type="checkbox"/> Enable hourly transfer samples</label><button className="primary-btn" disabled={busy || !!error}>{busy ? "Enrolling…" : "Create device & download setup file"}</button></form>
