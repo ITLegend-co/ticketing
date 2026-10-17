@@ -44,7 +44,7 @@ try {
     & icacls.exe $child.FullName /reset /T /Q | Out-Null
     if($LASTEXITCODE -ne 0){throw 'Could not secure monitoring files.'}
   }
-  foreach ($cache in @('inventory.json','inventory-sent.txt','network.json','history-slot.txt')) {
+  foreach ($cache in @('inventory.json','inventory-sent.txt','network.json','history-slot.txt','public-ip.json')) {
     Remove-Item (Join-Path $store $cache) -Force -ErrorAction SilentlyContinue
   }
   Copy-Item (Join-Path $PSScriptRoot 'Collect.ps1') (Join-Path $store 'Collect.ps1') -Force

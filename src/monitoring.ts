@@ -4,6 +4,7 @@ export type Reading = {
   at: number; hostname: string; user: string; cpu: number; memory: number; memoryGB: number;
   uptimeHours: number; pingMs?: number; rebootPending: boolean;
   disks: Array<{ name: string; totalGB: number; freeGB: number; usedPercent: number }>;
+  addressInfo?: { publicIP?: string; checkedAt?: number; interfaces?: Array<{adapter: string; localIP: string; macAddress: string}> };
   network?: { downloadMbps?: number; uploadMbps?: number; at: number };
   inventory?: { manufacturer: string; model: string; serial: string; os: string; cpuModel: string; ip: string; diskHealth: string; temperatureC?: number; batteryHealth?: number; antivirus: string; adapters: string; software: string; at: number };
 };

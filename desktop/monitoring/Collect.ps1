@@ -43,12 +43,32 @@ function GetReading {
   }
   $r=@{at=[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds();hostname=$env:COMPUTERNAME;user=Clip $cs.UserName;cpu=[Math]::Round($load,1);memory=$ram;memoryGB=[Math]::Round($cs.TotalPhysicalMemory/1GB,1);uptimeHours=[Math]::Round(((Get-Date)-$os.LastBootUpTime).TotalHours,1);disks=$disks;inventory=$inv;rebootPending=((Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired') -or (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending'))}
   if ($null -ne $ping) {$r.pingMs=$ping}
+  $interfaces = @(TryValue {
+    Get-CimInstance Win32_NetworkAdapterConfiguration -Filter 'IPEnabled=True' | Select-Object -First 32 | ForEach-Object {
+      @{adapter=Clip $_.Description 200;localIP=Clip ($_.IPAddress -join ', ') 2000;macAddress=Clip $_.MACAddress 100}
+    }
+  })
+  $r.addressInfo=@{interfaces=$interfaces}
+  if(!$Test) {
+    $publicPath=Join-Path $store 'public-ip.json'
+    $public=TryValue {Get-Content $publicPath -Raw | ConvertFrom-Json}
+    $checked=[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+    if(!$public -or $checked-$public.checkedAt -ge 900000) {
+      $public=@{checkedAt=$checked;publicIP=''}
+      $resolved=TryValue {Invoke-RestMethod -Uri 'https://api64.ipify.org?format=json' -TimeoutSec 5}
+      $parsed=$null
+      if($resolved -and [Net.IPAddress]::TryParse([string]$resolved.ip,[ref]$parsed)) {$public.publicIP=$parsed.ToString()}
+      $public | ConvertTo-Json | Set-Content $publicPath
+    }
+    $r.addressInfo.publicIP=[string]$public.publicIP
+    $r.addressInfo.checkedAt=$public.checkedAt
+  }
   return $r
 }
 try {
   if ($Test) {
     $r=GetReading
-    if ($r.memory -lt 0 -or $r.memory -gt 100 -or !$r.hostname -or !$r.inventory.os -or !$r.disks.Count) {throw 'Collector validation failed'}
+    if ($r.memory -lt 0 -or $r.memory -gt 100 -or !$r.hostname -or !$r.inventory.os -or !$r.disks.Count -or !$r.addressInfo.interfaces.Count) {throw 'Collector validation failed'}
     Write-Output 'Collector passed: hardware, memory, CPU, storage and inventory read. No data uploaded.'
     exit 0
   }

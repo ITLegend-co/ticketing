@@ -134,6 +134,34 @@
       },
       "$other": {
         ".validate": false
+      },
+      "addressInfo": {
+        "publicIP": {
+          ".validate": "newData.isString() && newData.val().length <= 45"
+        },
+        "checkedAt": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= now + 60000"
+        },
+        "interfaces": {
+          "$adapter": {
+            ".validate": "$adapter.matches(/^(0|[1-9]|[12][0-9]|3[01])$/) && newData.hasChildren(['adapter','localIP','macAddress'])",
+            "adapter": {
+              ".validate": "newData.isString() && newData.val().length <= 200"
+            },
+            "localIP": {
+              ".validate": "newData.isString() && newData.val().length <= 2000"
+            },
+            "macAddress": {
+              ".validate": "newData.isString() && newData.val().length <= 100"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
+        "$other": {
+          ".validate": false
+        }
       }
     }
   },
