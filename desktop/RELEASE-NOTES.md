@@ -15,3 +15,5 @@ Upgrading: quit the existing app from the system tray, then run the new installe
 Device Monitoring: included optional background collector with setup/removal actions in the system tray. Requires a device enrollment file from IT Admin, Windows administrator approval and publishing the new Firebase rules first. See the website monitoring setup page. Monitoring runs through a separate Windows scheduled task and sends no emails.
 
 Network addresses: separate Public IP Address and per-adapter Local IP Address / MAC Address. Public IP lookup runs every 15 minutes. Publish the updated Firebase monitoring rules and rerun device monitoring setup after upgrading; installing the app alone does not update the separate background collector.
+
+Public IPv4 and IPv6 now have independent lookups and separate dashboard fields. Unsupported or failed lookups show Unavailable without blocking the other address. Publish updated monitoring rules, install this version, and rerun monitoring setup to update the background collector.

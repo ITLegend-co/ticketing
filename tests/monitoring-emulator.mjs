@@ -18,11 +18,11 @@ assert.equal((await db('PUT','monitoringDevices/'+device.uid,registry,admin.toke
 const reading={at,hostname:'TEST-PC',user:'test',cpu:12,memory:40,memoryGB:8,uptimeHours:1,rebootPending:false,disks:[{name:'C:',freeGB:10,totalGB:20,usedPercent:50}],inventory:{at,os:'Windows'}};
 assert.equal((await db('PUT','monitoringCurrent/'+device.uid,reading,device.token)).status,200);
 assert.equal((await db('PATCH','monitoringCurrent/'+device.uid,{at:Date.now(),cpu:20},device.token)).status,200);
-const addressInfo={publicIP:'203.0.113.5',checkedAt:at,interfaces:[{adapter:'Ethernet',localIP:'192.168.1.20',macAddress:'00:11:22:33:44:55'},{adapter:'Wi-Fi',localIP:'192.168.1.21',macAddress:'00:11:22:33:44:66'}]};
+const addressInfo={publicIPv4:'203.0.113.5',publicIPv6:'2001:db8::5',checkedAt:at,interfaces:[{adapter:'Ethernet',localIP:'192.168.1.20',macAddress:'00:11:22:33:44:55'},{adapter:'Wi-Fi',localIP:'192.168.1.21',macAddress:'00:11:22:33:44:66'}]};
 assert.equal((await db('PATCH','monitoringCurrent/'+device.uid,{addressInfo},device.token)).status,200);
-assert.equal((await db('PATCH','monitoringCurrent/'+device.uid,{addressInfo:{...addressInfo,publicIP:'x'.repeat(46)}},device.token)).status,401);
+assert.equal((await db('PATCH','monitoringCurrent/'+device.uid,{addressInfo:{...addressInfo,publicIPv6:'x'.repeat(46)}},device.token)).status,401);
 assert.equal((await db('PATCH','monitoringCurrent/'+device.uid,{addressInfo:{...addressInfo,unexpected:true}},device.token)).status,401);
-assert.equal((await db('PATCH','monitoringCurrent/'+device.uid,{addressInfo:{publicIP:'',checkedAt:at}},device.token)).status,200);
+assert.equal((await db('PATCH','monitoringCurrent/'+device.uid,{addressInfo:{publicIPv4:'203.0.113.5',publicIPv6:'',checkedAt:at}},device.token)).status,200);
 
 for(const person of [admin,tech,management]) assert.equal((await db('GET','monitoringCurrent',undefined,person.token)).status,200);
 for(const person of [employee,device,other]) assert.equal((await db('GET','monitoringCurrent',undefined,person.token)).status,401);
@@ -39,3 +39,8 @@ assert.equal((await db('PUT','monitoringCurrent/'+device.uid,reading,device.toke
 await db('PATCH','users/'+management.uid,{status:'Suspended'},null,true);
 assert.equal((await db('GET','monitoringCurrent',undefined,management.token)).status,401);
 console.log('Firebase emulator passed: role access, device isolation, revocation, validation and ticket separation.');
+
+assert.equal((await db('PATCH','monitoringDevices/'+device.uid,{active:true},admin.token)).status,200);
+assert.equal((await db('PATCH','monitoringCurrent/'+device.uid,{addressInfo:{...addressInfo,publicIPv4:'x'.repeat(16)}},device.token)).status,401);
+assert.equal((await db('PATCH','monitoringCurrent/'+device.uid,{addressInfo:{publicIPv4:'',publicIPv6:'',checkedAt:at}},device.token)).status,200);
+assert.equal((await db('PATCH','monitoringCurrent/'+device.uid,{addressInfo:{publicIP:'203.0.113.5',checkedAt:at}},device.token)).status,200);

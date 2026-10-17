@@ -8,6 +8,11 @@ function TryValue($action) { try { & $action } catch { $null } }
 function Clip($value, $length=2000) { $s = [string]$value; $s.Substring(0,[Math]::Min($s.Length,$length)) }
 function ProtectText($text) { [Convert]::ToBase64String([Security.Cryptography.ProtectedData]::Protect([Text.Encoding]::UTF8.GetBytes($text),$null,[Security.Cryptography.DataProtectionScope]::LocalMachine)) }
 function UnprotectText($text) { [Text.Encoding]::UTF8.GetString([Security.Cryptography.ProtectedData]::Unprotect([Convert]::FromBase64String($text),$null,[Security.Cryptography.DataProtectionScope]::LocalMachine)) }
+function ParsePublicIP($value, $family) {
+  $parsed=$null
+  if([Net.IPAddress]::TryParse([string]$value,[ref]$parsed) -and $parsed.AddressFamily.ToString() -eq $family) {return $parsed.ToString()}
+  return ''
+}
 function GetReading {
   $os = Get-CimInstance Win32_OperatingSystem
   $cs = Get-CimInstance Win32_ComputerSystem
@@ -53,20 +58,28 @@ function GetReading {
     $publicPath=Join-Path $store 'public-ip.json'
     $public=TryValue {Get-Content $publicPath -Raw | ConvertFrom-Json}
     $checked=[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
-    if(!$public -or $checked-$public.checkedAt -ge 900000) {
-      $public=@{checkedAt=$checked;publicIP=''}
-      $resolved=TryValue {Invoke-RestMethod -Uri 'https://api64.ipify.org?format=json' -TimeoutSec 5}
-      $parsed=$null
-      if($resolved -and [Net.IPAddress]::TryParse([string]$resolved.ip,[ref]$parsed)) {$public.publicIP=$parsed.ToString()}
+    if(!$public -or $public.schema -ne 2 -or $checked-$public.checkedAt -ge 900000) {
+      $public=@{schema=2;checkedAt=$checked;publicIPv4='';publicIPv6=''}
+      $v4=TryValue {Invoke-RestMethod -Uri 'https://api.ipify.org?format=json' -TimeoutSec 5}
+      $public.publicIPv4=ParsePublicIP $v4.ip 'InterNetwork'
+      $v6=TryValue {Invoke-RestMethod -Uri 'https://api6.ipify.org?format=json' -TimeoutSec 5}
+      $public.publicIPv6=ParsePublicIP $v6.ip 'InterNetworkV6'
       $public | ConvertTo-Json | Set-Content $publicPath
     }
-    $r.addressInfo.publicIP=[string]$public.publicIP
+    $r.addressInfo.publicIPv4=[string]$public.publicIPv4
+    $r.addressInfo.publicIPv6=[string]$public.publicIPv6
     $r.addressInfo.checkedAt=$public.checkedAt
   }
   return $r
 }
 try {
   if ($Test) {
+    if((ParsePublicIP '203.0.113.5' 'InterNetwork') -ne '203.0.113.5' -or
+       (ParsePublicIP '2001:db8::1' 'InterNetworkV6') -ne '2001:db8::1' -or
+       (ParsePublicIP '203.0.113.5' 'InterNetworkV6') -ne '' -or
+       (ParsePublicIP '2001:db8::1' 'InterNetwork') -ne '' -or
+       (ParsePublicIP 'invalid' 'InterNetwork') -ne '' -or
+       (ParsePublicIP $null 'InterNetworkV6') -ne '') {throw 'Public IP family validation failed'}
     $r=GetReading
     if ($r.memory -lt 0 -or $r.memory -gt 100 -or !$r.hostname -or !$r.inventory.os -or !$r.disks.Count -or !$r.addressInfo.interfaces.Count) {throw 'Collector validation failed'}
     Write-Output 'Collector passed: hardware, memory, CPU, storage and inventory read. No data uploaded.'

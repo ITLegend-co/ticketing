@@ -161,6 +161,12 @@
         },
         "$other": {
           ".validate": false
+        },
+        "publicIPv4": {
+          ".validate": "newData.isString() && newData.val().length <= 15"
+        },
+        "publicIPv6": {
+          ".validate": "newData.isString() && newData.val().length <= 45"
         }
       }
     }
