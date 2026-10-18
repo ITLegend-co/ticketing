@@ -4,6 +4,7 @@ import { createUserWithEmailAndPassword, deleteUser, initializeAuth, inMemoryPer
 import { get, onValue, ref, set, update } from "firebase/database";
 import { auth, database, firebaseConfig, generateTemporaryPassword } from "./firebase";
 import { canViewMonitoring, deviceAlerts, deviceOnline, type Device, type Reading } from "./monitoring";
+import { deviceAssignment, type DirectoryPerson } from "./monitoring-enrollment";
 import "./monitoring.css";
 
 const time = (at?: number) => at ? new Date(at).toLocaleString() : "Not reported";
@@ -27,6 +28,22 @@ export default function DeviceMonitoring({ role }: { role: string }) {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [config, setConfig] = useState<object | null>(null);
+  const [directory, setDirectory] = useState<Record<string, DirectoryPerson>>({});
+  const [directoryLoading, setDirectoryLoading] = useState(true);
+  const [directoryError, setDirectoryError] = useState("");
+  const [personId, setPersonId] = useState("");
+  const [personSearch, setPersonSearch] = useState("");
+  useEffect(() => {
+    setDirectory({}); setPersonId(""); setDirectoryError("");
+    if (role !== "IT Admin") { setDirectoryLoading(false); return; }
+    setDirectoryLoading(true);
+    return onValue(ref(database, "users"), snapshot => {
+      setDirectory(snapshot.val() || {}); setDirectoryLoading(false); setDirectoryError("");
+    }, () => { setDirectoryLoading(false); setDirectoryError("Could not load User Directory. Check your connection and IT Admin access, then reload."); });
+  }, [role]);
+  const activePeople = Object.entries(directory).filter(([, person]) => person.status === "Active").sort((a,b)=>a[1].name.localeCompare(b[1].name));
+  const matchingPeople = activePeople.filter(([id, person]) => id === personId || [person.name,person.email,person.department].join(" ").toLowerCase().includes(personSearch.toLowerCase()));
+  const assignedPerson = directory[personId]?.status === "Active" ? directory[personId] : undefined;
   const canView = canViewMonitoring(role);
   useEffect(() => {
     if (!canView) return;
@@ -46,11 +63,14 @@ export default function DeviceMonitoring({ role }: { role: string }) {
     event.preventDefault();
     if (busy || role !== "IT Admin" || !auth.currentUser) return;
     const data = new FormData(event.currentTarget), admin = auth.currentUser;
-    setBusy(true); setError(""); setConfig(null);
+    const selectedUserId = String(data.get("userId") || "");
+    setBusy(true); setError(""); setNotice(""); setConfig(null);
     let app;
     try {
       const check = await get(ref(database, "users/" + admin.uid));
       if (check.val()?.role !== "IT Admin" || check.val()?.status !== "Active") throw new Error("An active IT Admin account is required.");
+      const person = selectedUserId ? await get(ref(database, "users/" + selectedUserId)) : null;
+      const assignment = deviceAssignment(selectedUserId, person?.val());
       const email = "device-" + crypto.randomUUID() + "@devices.mountaintorq.invalid";
       const password = generateTemporaryPassword();
       app = initializeApp(firebaseConfig, "device-" + crypto.randomUUID());
@@ -60,8 +80,7 @@ export default function DeviceMonitoring({ role }: { role: string }) {
       try {
         if (auth.currentUser?.uid !== admin.uid) throw new Error("Administrator session changed.");
         await set(ref(database, "monitoringDevices/" + deviceId), {
-          name: String(data.get("name")).trim(), location: String(data.get("location")).trim(),
-          department: String(data.get("department")).trim(), active: true, speedTests: data.get("speed") === "on",
+          ...assignment, active: true, speedTests: data.get("speed") === "on",
           createdAt: Date.now(), enrolledBy: admin.uid,
         });
       } catch (e) { await deleteUser(credential.user).catch(() => {}); throw e; }
@@ -119,8 +138,21 @@ export default function DeviceMonitoring({ role }: { role: string }) {
       </> : <p>Awaiting the first report from this computer.</p>}
       {role==="IT Admin" && <div className="monitor-actions"><label><input type="checkbox" checked={!!device.speedTests} onChange={async e=>{try{await update(ref(database,"monitoringDevices/"+selected),{speedTests:e.target.checked});}catch{setError("Could not update speed-test setting.");}}}/> Enable hourly network transfer samples</label><button className="secondary-btn" onClick={async()=>{if(!confirm(device.active ? "Stop accepting monitoring reports from this computer?" : "Allow this device to report again?"))return;try{await update(ref(database,"monitoringDevices/"+selected),{active:!device.active});}catch{setError("Could not change device access.");}}}>{device.active ? "Revoke monitoring access" : "Restore monitoring access"}</button><button className="secondary-btn monitor-delete" disabled={deleting} onClick={()=>deleteDevice(selected)}>{deleting ? "Deleting…" : "Delete device"}</button></div>}
     </section>}
-    {role==="IT Admin" && <section className="panel monitor-panel"><h2>Enrol a computer</h2><p>Create one device file per computer. In the Windows app, right-click the tray icon → Set up device monitoring, then select the file. Windows administrator permission is required.</p>
-      <form className="monitor-enroll" onSubmit={enroll}><label>Computer label<input name="name" required maxLength={100} placeholder="KK Office — Accounts PC"/></label><label>Location<input name="location" required maxLength={80} placeholder="KK / KP / PH"/></label><label>Department<input name="department" required maxLength={80}/></label><label><input name="speed" type="checkbox"/> Enable hourly transfer samples</label><button className="primary-btn" disabled={busy || !!error}>{busy ? "Enrolling…" : "Create device & download setup file"}</button></form>
+    {role==="IT Admin" && <section className="panel monitor-panel"><h2>Enrol a computer</h2><p>Select an existing user to use their full name and department. Create one device file per computer; the reported Windows computer name distinguishes multiple computers for the same user. In the Windows app, right-click the tray icon → Set up device monitoring, then select the file. Windows administrator permission is required.</p>
+      {directoryError && <p role="alert" className="auth-message error">{directoryError}</p>}
+      <form className="monitor-enroll" onSubmit={enroll}>
+        <label>Find a user<input type="search" value={personSearch} disabled={busy || directoryLoading} onChange={e=>setPersonSearch(e.target.value)} placeholder="Name, email or department"/></label>
+        <label>User from directory<select name="userId" required value={personId} disabled={busy || directoryLoading || !!directoryError} onChange={e=>{setPersonId(e.target.value);setConfig(null);setError("");}}>
+          <option value="">{directoryLoading ? "Loading users…" : "Select a user"}</option>
+          {matchingPeople.map(([id,person])=><option key={id} value={id}>{person.name} — {person.department} — {person.email}</option>)}
+        </select></label>
+        <label><input name="speed" type="checkbox" disabled={busy}/> Enable hourly transfer samples</label>
+        <button className="primary-btn" disabled={busy || directoryLoading || !!directoryError || !assignedPerson}>{busy ? "Enrolling…" : "Create device & download setup file"}</button>
+      </form>
+      {!directoryLoading && !directoryError && !activePeople.length && <p>No active users found. Add or activate a user in User Directory first.</p>}
+      {!!activePeople.length && !matchingPeople.length && <p>No users match your search.</p>}
+      {assignedPerson && <div className="monitor-details"><div><span>Computer label</span><strong>{assignedPerson.name}</strong></div><div><span>Department</span><strong>{assignedPerson.department}</strong></div><div><span>Location</span><strong>{assignedPerson.location?.trim() || "Not recorded"}</strong></div></div>}
+      <p className="monitor-muted">Location is not currently collected in User Directory. Missing locations are saved as Not recorded. Selecting a user does not change their account or grant them monitoring access.</p>
       {config && <p role="status">Device created. Keep its setup file private; it contains that device’s credentials. Delete the file after installation. <button className="text-btn" onClick={()=>saveConfig(config)}>Download again</button></p>}
       <p><a href={import.meta.env.BASE_URL+"monitoring-setup.html"} target="_blank" rel="noreferrer">Monitoring setup and removal instructions</a></p>
     </section>}

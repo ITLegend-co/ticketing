@@ -1,5 +1,5 @@
 export const canViewMonitoring = (role: string) => ["IT Admin", "IT Technician", "Management"].includes(role);
-export type Device = { name: string; location: string; department: string; active: boolean; createdAt: number; speedTests: boolean };
+export type Device = { userId?: string; name: string; location: string; department: string; active: boolean; createdAt: number; speedTests: boolean };
 export type Reading = {
   at: number; hostname: string; user: string; cpu: number; memory: number; memoryGB: number;
   uptimeHours: number; pingMs?: number; rebootPending: boolean;

@@ -28,6 +28,9 @@
       },
       "$other": {
         ".validate": false
+      },
+      "userId": {
+        ".validate": "newData.isString() && (data.exists() ? newData.val() === data.val() : root.child('users').child(newData.val()).child('status').val() === 'Active')"
       }
     }
   },
