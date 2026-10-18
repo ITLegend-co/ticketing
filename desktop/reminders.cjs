@@ -11,7 +11,7 @@ module.exports=function createReminders({app,senderOK,smoke=false}){
  }
  function closePopup(){if(popup&&!popup.isDestroyed()){closing=true;popup.close();closing=false;}popup=null;current=null;}
  function bind(uid){
-  if(state.uid!==uid){closePopup();state.uid=uid;state.schedule=null;state.done={};persist();}
+  if(state.uid!==uid){closePopup();state.uid=uid;state.schedule=null;persist();}
  }
  function sync(uid,schedule){
   bind(uid);state.schedule=scheduleOK(schedule)?schedule:null;
@@ -23,7 +23,7 @@ module.exports=function createReminders({app,senderOK,smoke=false}){
   const now=Date.now(),item=current;
   if(item.preview){closePopup();return;}
   if(ack){
-   state.done[item.date]={acknowledgedAt:now};
+   state.done[state.uid+':'+item.date]={acknowledgedAt:now};
    state.pending=state.pending.filter(a=>!(a.uid===state.uid&&a.date===item.date));
    state.pending.push({uid:state.uid,installationId:state.installationId,date:item.date,scheduledFor:item.scheduledFor,acknowledgedAt:now,hostname:os.hostname().slice(0,200)});
   }else{state.done[item.date]={snoozeUntil:now+10*60000};}
@@ -39,15 +39,16 @@ module.exports=function createReminders({app,senderOK,smoke=false}){
   popup.webContents.on('will-navigate',e=>e.preventDefault());
   popup.webContents.on('will-attach-webview',e=>e.preventDefault());
   popup.webContents.once('did-finish-load',()=>{if(popup&&!popup.isDestroyed()){popup.webContents.send('ups-message',{message:item.message});popup.show();}});
-  popup.on('close',()=>{if(!closing&&current){if(!current.preview){state.done[current.date]={snoozeUntil:Date.now()+10*60000};persist();}}});
+  popup.on('close',()=>{if(!closing&&current){if(!current.preview){state.done[state.uid+':'+current.date]={snoozeUntil:Date.now()+10*60000};persist();}}});
   popup.on('closed',()=>{popup=null;current=null;});
   popup.loadFile(path.join(__dirname,'reminder.html')).catch(()=>closePopup());
  }
  function tick(){
   if(popup||locked||!state.uid)return;
   const now=Date.now();state.pending=state.pending.filter(a=>a.acknowledgedAt>now-89*86400000).slice(-500);
-  for(const date of Object.keys(state.done)){if(date<new Date(now-32*86400000).toISOString().slice(0,10))delete state.done[date];}
-  const item=due(state.schedule,now,state.done);if(item)open(item);
+  for(const date of Object.keys(state.done)){if(date.slice(-10)<new Date(now-32*86400000).toISOString().slice(0,10))delete state.done[date];}
+  const ownDone=Object.fromEntries(Object.entries(state.done).filter(([key])=>key.startsWith(state.uid+':')).map(([key,value])=>[key.slice(-10),value]));
+  const item=due(state.schedule,now,ownDone);if(item)open(item);
  }
  function validUid(uid){return typeof uid==='string'&&/^[\w-]{1,128}$/.test(uid);}
  ipcMain.on('mt-reminder-bind',(event,uid)=>{if(senderOK(event)&&validUid(uid))bind(uid);});
@@ -61,7 +62,7 @@ module.exports=function createReminders({app,senderOK,smoke=false}){
  powerMonitor.on('lock-screen',()=>{locked=true;closePopup();});
  powerMonitor.on('unlock-screen',()=>{locked=false;tick();});
  powerMonitor.on('resume',()=>setTimeout(tick,2000));
- const timer=setInterval(tick,15000);if(!smoke)setTimeout(tick,5000);
- app.on('before-quit',()=>{clearInterval(timer);persist();closePopup();});
+ const timer=setInterval(tick,15000);const startupTimer=!smoke?setTimeout(tick,5000):null;
+ app.on('before-quit',()=>{clearInterval(timer);clearTimeout(startupTimer);persist();closePopup();});
  return {get window(){return popup;},get pending(){return state.pending;},sync,bind,tick,preview:()=>open({preview:true,date:'2099-01-01',scheduledFor:'17:00',message:'Before you leave, please save your work, shut down your computer, and turn off your UPS.'})};
 };
