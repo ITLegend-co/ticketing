@@ -1,0 +1,61 @@
+{
+  "reminderSchedules": {
+    ".read": "auth != null && root.child('users').child(auth.uid).child('status').val() === 'Active' && root.child('users').child(auth.uid).child('role').val() === 'IT Admin'",
+    "$uid": {
+      ".read": "auth != null && root.child('users').child(auth.uid).child('status').val() === 'Active' && (auth.uid === $uid || root.child('users').child(auth.uid).child('role').val() === 'IT Admin')",
+      ".write": "auth != null && root.child('users').child(auth.uid).child('status').val() === 'Active' && root.child('users').child(auth.uid).child('role').val() === 'IT Admin' && (!newData.exists() || root.child('users').child($uid).child('status').val() === 'Active')",
+      ".validate": "newData.hasChildren(['enabled','message','days','updatedAt','updatedBy'])",
+      "enabled": {
+        ".validate": "newData.isBoolean()"
+      },
+      "message": {
+        ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 500"
+      },
+      "updatedBy": {
+        ".validate": "newData.val() === auth.uid"
+      },
+      "updatedAt": {
+        ".validate": "newData.isNumber() && newData.val() >= now - 60000 && newData.val() <= now + 60000"
+      },
+      "days": {
+        ".validate": "newData.hasChildren(['mon','tue','wed','thu','fri','sat','sun'])",
+        "$day": {
+          ".validate": "($day === 'mon' || $day === 'tue' || $day === 'wed' || $day === 'thu' || $day === 'fri' || $day === 'sat' || $day === 'sun') && newData.isString() && (newData.val() === '' || newData.val().matches(/^([01][0-9]|2[0-3]):[0-5][0-9]$/))"
+        }
+      },
+      "$other": {
+        ".validate": false
+      }
+    }
+  },
+  "reminderAcks": {
+    ".read": "auth != null && root.child('users').child(auth.uid).child('status').val() === 'Active' && root.child('users').child(auth.uid).child('role').val() === 'IT Admin'",
+    "$uid": {
+      ".read": "auth != null && root.child('users').child(auth.uid).child('status').val() === 'Active' && (auth.uid === $uid || root.child('users').child(auth.uid).child('role').val() === 'IT Admin')",
+      "$installation": {
+        "$date": {
+          ".write": "auth != null && root.child('users').child(auth.uid).child('status').val() === 'Active' && auth.uid === $uid && !data.exists() && newData.exists()",
+          ".validate": "$installation.matches(/^[a-f0-9-]{36}$/) && $date.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && newData.hasChildren(['date','scheduledFor','acknowledgedAt','receivedAt','hostname'])",
+          "date": {
+            ".validate": "newData.val() === $date"
+          },
+          "scheduledFor": {
+            ".validate": "newData.isString() && newData.val().matches(/^([01][0-9]|2[0-3]):[0-5][0-9]$/)"
+          },
+          "acknowledgedAt": {
+            ".validate": "newData.isNumber() && newData.val() >= now - 7776000000 && newData.val() <= now + 300000"
+          },
+          "receivedAt": {
+            ".validate": "newData.isNumber() && newData.val() >= now - 60000 && newData.val() <= now + 60000"
+          },
+          "hostname": {
+            ".validate": "newData.isString() && newData.val().length <= 200"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      }
+    }
+  }
+}

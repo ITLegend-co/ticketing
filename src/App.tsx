@@ -1,3 +1,5 @@
+import Reminders from "./Reminders";
+import { useUpsReminders } from "./use-ups-reminders";
 import { useDesktopNotifications } from "./use-desktop-notifications";
 import { appendReplyPhotos, pastedPhotos } from "./paste-photos";
 import { displayName } from "./display-name";
@@ -98,8 +100,9 @@ export default function App() {
   const [ticketsLoading, setTicketsLoading] = useState(true);
   const ticketsReady = useRef(false);
   useDesktopNotifications(user?.uid || "", profile?.role || "", !!user && profile?.status === "Active", !ticketsLoading && ticketsReady.current, tickets);
+  useUpsReminders(user?.uid || "", profile?.status === "Active", !authLoading && !profileLoading);
   const [loadError, setLoadError] = useState("");
-  const [page, setPage] = useState<"Dashboard" | "Tickets" | "Users" | "Device Monitoring">(operatorPortal ? "Dashboard" : "Tickets");
+  const [page, setPage] = useState<"Dashboard" | "Tickets" | "Users" | "Device Monitoring" | "UPS Reminders">(operatorPortal ? "Dashboard" : "Tickets");
   const [menuOpen, setMenuOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [ticketPhotos, setTicketPhotos] = useState<File[]>([]);
@@ -375,8 +378,8 @@ export default function App() {
     <aside className={`sidebar ${menuOpen ? "mobile-open" : ""}`}>
       <div className="brand"><div className="brand-mark"><Headphones size={21} /></div><div><strong>Mountain Torq</strong><span>IT Helpdesk</span></div><button className="icon-btn close-mobile" onClick={() => setMenuOpen(false)}><X size={19}/></button></div>
       <nav className="sidebar-nav"><p className="nav-heading">Workspace</p>
-        {([... (operatorPortal ? ["Dashboard", "Tickets"] : ["Tickets"]), ...(operatorPortal && profile.role === "IT Admin" ? ["Users"] : []), ...(operatorPortal && canViewMonitoring(profile.role) ? ["Device Monitoring"] : [])] as Array<typeof page>).map((name) => {
-          const Icon = name === "Dashboard" ? LayoutDashboard : name === "Tickets" ? Ticket : name === "Device Monitoring" ? Monitor : Users;
+        {([... (operatorPortal ? ["Dashboard", "Tickets"] : ["Tickets"]), ...(operatorPortal && profile.role === "IT Admin" ? ["Users", "UPS Reminders"] : []), ...(operatorPortal && canViewMonitoring(profile.role) ? ["Device Monitoring"] : [])] as Array<typeof page>).map((name) => {
+          const Icon = name === "Dashboard" ? LayoutDashboard : name === "Tickets" ? Ticket : name === "Device Monitoring" ? Monitor : name === "UPS Reminders" ? Clock3 : Users;
           return <button key={name} className={`nav-item ${page === name ? "active" : ""}`} onClick={() => { setPage(name); setMenuOpen(false); }}><Icon size={18}/>{!operatorPortal && name === "Tickets" ? "My requests" : name}</button>;
         })}
       </nav>
@@ -386,12 +389,13 @@ export default function App() {
     {menuOpen && <button className="sidebar-backdrop" aria-label="Close menu" onClick={() => setMenuOpen(false)}/>}
     <main className="main"><header className="topbar"><button className="icon-btn menu-btn" aria-label="Open menu" onClick={() => setMenuOpen(true)}><Menu size={21}/></button><span className="header-title">Mountain Torq IT Helpdesk · {operatorPortal ? "Staff portal" : "Request portal"}</span><span className="header-account">{profile.email}</span></header>
       <div className="content">
-        <div className="page-heading"><div><h1>{page === "Dashboard" ? `Welcome, ${displayName(profile.name)}` : !operatorPortal ? "My requests" : page}</h1><p>{page === "Dashboard" ? "Your helpdesk at a glance." : page === "Tickets" ? operatorPortal ? "Review and manage support requests." : "Submit a request and follow its progress." : page === "Device Monitoring" ? "Computer health and performance across your locations." : "Manage helpdesk accounts."}</p></div>
-          {page !== "Device Monitoring" && <button className="primary-btn" onClick={() => { if (page === "Users") { setUserMode("create"); setUserError(""); setUserOpen(true); } else setCreateOpen(true); }}>{page === "Users" ? <UserPlus size={17}/> : <Plus size={17}/>} {page === "Users" ? "Create user" : "Submit request"}</button>}
+        <div className="page-heading"><div><h1>{page === "Dashboard" ? `Welcome, ${displayName(profile.name)}` : !operatorPortal ? "My requests" : page}</h1><p>{page === "Dashboard" ? "Your helpdesk at a glance." : page === "Tickets" ? operatorPortal ? "Review and manage support requests." : "Submit a request and follow its progress." : page === "Device Monitoring" ? "Computer health and performance across your locations." : page === "UPS Reminders" ? "Schedule staff reminders and review acknowledgments." : "Manage helpdesk accounts."}</p></div>
+          {page !== "Device Monitoring" && page !== "UPS Reminders" && <button className="primary-btn" onClick={() => { if (page === "Users") { setUserMode("create"); setUserError(""); setUserOpen(true); } else setCreateOpen(true); }}>{page === "Users" ? <UserPlus size={17}/> : <Plus size={17}/>} {page === "Users" ? "Create user" : "Submit request"}</button>}
         </div>
         {linkError && <div className="auth-message error workspace-error" role="alert">{linkError}</div>}
         {loadError && <div className="auth-message error workspace-error"><CircleAlert size={17}/>{loadError}</div>}
         {page === "Device Monitoring" && operatorPortal && <DeviceMonitoring role={profile.role}/>}
+        {page === "UPS Reminders" && operatorPortal && <Reminders role={profile.role}/>}
         {page === "Dashboard" && <>
           <section className="stats-grid">{[
             ["Awaiting review", myTickets.filter((item) => !item.reviewedAt).length, "blue"], ["In progress", count("In Progress"), "violet"],

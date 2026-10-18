@@ -13,6 +13,7 @@ if (smoke) {
 }
 const HOME = 'https://itlegend-co.github.io/ticketing/askjaslhrui3893478rehfsj38uhef/';
 const APP_ID = 'com.mountaintorq.ithelpdesk';
+let reminders;
 let win, tray, quitting = false, allowed = new Set(), account = '', retryTimer;
 const popups = require('./popup.cjs')((id, owner) => {
   if (!quitting && account === owner && allowed.has(id) && win && !win.isDestroyed()) {
@@ -35,13 +36,14 @@ function load() { if (win && !win.isDestroyed()) win.loadURL(HOME).catch(() => {
 function trayMenu() {
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Open helpdesk', click: show },
+    { label: 'Preview UPS reminder', click: () => reminders?.preview() },
     { label: 'Start with Windows', type: 'checkbox', checked: app.getLoginItemSettings({ args: ['--hidden'] }).openAtLogin,
       click: item => { app.setLoginItemSettings({ openAtLogin: item.checked, args: ['--hidden'] }); trayMenu(); } },
     { label: 'Reload / reconnect', click: () => win.webContents.reloadIgnoringCache() },
     { label: 'Set up device monitoring', click: () => require('./monitoring-launch.cjs')() },
     { label: 'Remove device monitoring', click: () => require('./monitoring-launch.cjs')(true) },
     { type: 'separator' },
-    { label: 'Quit (stop notifications)', click: () => app.quit() },
+    { label: 'Quit (stop notifications and reminders)', click: () => app.quit() },
   ]));
 }
 app.setAppUserModelId(APP_ID);
@@ -74,6 +76,14 @@ else {
       clearTimeout(retryTimer); retryTimer = setTimeout(load, 15000);
     });
     win.webContents.on('render-process-gone', () => { if (!quitting) { clearNotices(); retryTimer = setTimeout(load, 3000); } });
+    reminders = require('./reminders.cjs')({app,senderOK,smoke});
+    if (!smoke && process.platform === 'win32') {
+      const startupFlag = path.join(app.getPath('userData'), 'ups-startup-configured');
+      if (!fs.existsSync(startupFlag)) {
+        app.setLoginItemSettings({openAtLogin:true,args:['--hidden']});
+        fs.writeFileSync(startupFlag,'1');
+      }
+    }
     diagnostic('Creating tray');
     tray = new Tray(nativeImage.createFromPath(icon)); tray.setToolTip('Mountain Torq IT Helpdesk — running'); tray.on('double-click', show); trayMenu();
     ipcMain.on('mt-access', (event, data) => {
@@ -103,6 +113,7 @@ else {
           const opened = await win.webContents.executeJavaScript('window.__smokeTicket === "smoke-ticket"');
           if (!opened) throw new Error('Popup did not open its ticket');
           diagnostic('Open ticket routed to helpdesk');
+          await require('./reminder-smoke.cjs')(reminders, diagnostic);
           clearTimeout(timeout); app.exit(0);
         } catch (error) { diagnostic(error.stack); clearTimeout(timeout); app.exit(4); }
       });

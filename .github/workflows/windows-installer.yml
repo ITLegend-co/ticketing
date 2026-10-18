@@ -31,7 +31,7 @@ jobs:
           cache: npm
           cache-dependency-path: desktop/package-lock.json
       - name: Test notification routing
-        run: node --experimental-strip-types --test tests/desktop-notifications.test.mjs
+        run: node --experimental-strip-types --test tests/desktop-notifications.test.mjs tests/reminder-core.test.mjs
       - name: Install desktop dependencies
         working-directory: desktop
         run: npm ci

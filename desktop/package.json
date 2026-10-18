@@ -27,7 +27,15 @@
       "popup.css",
       "popup.js",
       "popup-smoke.cjs",
-      "monitoring-launch.cjs"
+      "monitoring-launch.cjs",
+      "reminder-core.cjs",
+      "reminders.cjs",
+      "reminder-preload.cjs",
+      "reminder-smoke.cjs",
+      "reminder.html",
+      "reminder.css",
+      "reminder.js",
+      "reminder-cat.svg"
     ],
     "directories": {
       "output": "release"

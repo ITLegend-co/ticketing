@@ -72,3 +72,23 @@ assert.ok(await (await db('GET','monitoringDevices/'+other.uid,undefined,admin.t
 assert.equal((await db('PUT','monitoringCurrent/'+device.uid,reading,device.token)).status,401);
 assert.equal((await db('PUT','monitoringHistory/'+device.uid+'/0',{at,cpu:10,memory:10},device.token)).status,401);
 console.log('Firebase emulator passed: role access, device isolation, revocation, atomic deletion, validation and ticket separation.');
+
+const reminder={enabled:true,message:'Turn off UPS',days:{mon:'17:00',tue:'17:00',wed:'17:00',thu:'17:00',fri:'17:00',sat:'13:00',sun:''},updatedAt:Date.now(),updatedBy:admin.uid};
+for(const person of [employee,tech,management,device]) assert.equal((await db('PUT','reminderSchedules/'+employee.uid,reminder,person.token)).status,401);
+assert.equal((await db('PUT','reminderSchedules/'+employee.uid,reminder,admin.token)).status,200);
+assert.equal((await db('GET','reminderSchedules/'+employee.uid,undefined,employee.token)).status,200);
+assert.equal((await db('GET','reminderSchedules/'+employee.uid,undefined,tech.token)).status,401);
+assert.equal((await db('GET','reminderSchedules',undefined,employee.token)).status,401);
+assert.equal((await db('GET','reminderSchedules',undefined,admin.token)).status,200);
+assert.equal((await db('PUT','reminderSchedules/'+employee.uid,{...reminder,days:{...reminder.days,sat:'25:00'}},admin.token)).status,401);
+const ackPath='reminderAcks/'+employee.uid+'/12345678-1234-1234-1234-123456789012/2026-10-18';
+const ack={date:'2026-10-18',scheduledFor:'17:00',acknowledgedAt:Date.now(),receivedAt:Date.now(),hostname:'TEST-PC'};
+assert.equal((await db('PUT',ackPath,ack,tech.token)).status,401);
+assert.equal((await db('PUT',ackPath,ack,employee.token)).status,200);
+assert.equal((await db('PUT',ackPath,{...ack,hostname:'Changed'},employee.token)).status,401);
+assert.equal((await db('GET','reminderAcks',undefined,admin.token)).status,200);
+assert.equal((await db('GET',ackPath,undefined,tech.token)).status,401);
+await db('PATCH','users/'+employee.uid,{status:'Suspended'},null,true);
+assert.equal((await db('GET','reminderSchedules/'+employee.uid,undefined,employee.token)).status,401);
+assert.equal((await db('PUT','reminderSchedules/'+employee.uid,reminder,admin.token)).status,401);
+console.log('Reminder permissions passed: admin schedules, own-user reads, validation and append-only own acknowledgments.');
