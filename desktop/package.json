@@ -35,7 +35,8 @@
       "reminder.html",
       "reminder.css",
       "reminder.js",
-      "reminder-cat.svg"
+      "reminder-cat.svg",
+      "updates.cjs"
     ],
     "directories": {
       "output": "release"

@@ -6,8 +6,9 @@ Add-Type -AssemblyName System.Security
 $store = Join-Path $env:ProgramData 'MountainTorqMonitoring'
 function TryValue($action) { try { & $action } catch { $null } }
 function Clip($value, $length=2000) { $s = [string]$value; $s.Substring(0,[Math]::Min($s.Length,$length)) }
-function ProtectText($text) { [Convert]::ToBase64String([Security.Cryptography.ProtectedData]::Protect([Text.Encoding]::UTF8.GetBytes($text),$null,[Security.Cryptography.DataProtectionScope]::LocalMachine)) }
-function UnprotectText($text) { [Text.Encoding]::UTF8.GetString([Security.Cryptography.ProtectedData]::Unprotect([Convert]::FromBase64String($text),$null,[Security.Cryptography.DataProtectionScope]::LocalMachine)) }
+. (Join-Path $PSScriptRoot 'Credentials.ps1')
+$stage='starting'
+$runLock=$null
 function ParsePublicIP($value, $family) {
   $parsed=$null
   if([Net.IPAddress]::TryParse([string]$value,[ref]$parsed) -and $parsed.AddressFamily.ToString() -eq $family) {return $parsed.ToString()}
@@ -85,14 +86,24 @@ try {
     Write-Output 'Collector passed: hardware, memory, CPU, storage and inventory read. No data uploaded.'
     exit 0
   }
+  $stage='locking collector'
+  try {$runLock=[IO.File]::Open((Join-Path $store 'collector.lock'),[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)} catch {exit 0}
+  $stage='reading configuration'
   $config=Get-Content (Join-Path $store 'config.json') -Raw | ConvertFrom-Json
-  $secret=UnprotectText (Get-Content (Join-Path $store 'credentials.dat') -Raw)
+  $stage='reading saved credentials (if unreadable, re-enrol once)'
+  $secret=ReadDeviceCredential $store
+  $stage='refreshing Firebase login'
   $token=Invoke-RestMethod -Method Post -Uri ('https://securetoken.googleapis.com/v1/token?key='+$config.apiKey) -ContentType 'application/x-www-form-urlencoded' -Body @{grant_type='refresh_token';refresh_token=$secret} -TimeoutSec 15
   if($token.user_id -ne $config.deviceId) {throw 'Device identity mismatch'}
+  $stage='saving refreshed credentials'
+  if(!$token.refresh_token) {throw 'Missing refresh token'}
+  SaveDeviceCredential $store $token.refresh_token
+  $stage='checking device access'
   $base='https://ticketing-a8461-default-rtdb.asia-southeast1.firebasedatabase.app'
   $suffix='?auth='+[Uri]::EscapeDataString($token.id_token)
   $device=Invoke-RestMethod -Uri ($base+'/monitoringDevices/'+$config.deviceId+'.json'+$suffix) -TimeoutSec 15
-  if (!$device.active) {exit 0}
+  if (!$device.active) {'Monitoring stopped: device is inactive or deleted.' | Set-Content (Join-Path $store 'status.txt');exit 0}
+  $stage='collecting hardware'
   $r=GetReading
   $cachePath=Join-Path $store 'network.json'
   $network=TryValue {Get-Content $cachePath -Raw | ConvertFrom-Json}
@@ -122,6 +133,7 @@ try {
   if($sent -and $sent.Trim() -eq [string]$inventoryAt) {$r.Remove('inventory')}
   if(!$r.ContainsKey('pingMs')) {$r.pingMs=$null}
   $body=$r | ConvertTo-Json -Depth 8 -Compress
+  $stage='uploading current readings'
   $null=Invoke-RestMethod -Method Patch -Uri ($base+'/monitoringCurrent/'+$config.deviceId+'.json'+$suffix) -ContentType 'application/json' -Body ([Text.Encoding]::UTF8.GetBytes($body)) -TimeoutSec 15
   [string]$inventoryAt | Set-Content $inventorySentPath
   $bucket=[long][Math]::Floor([DateTimeOffset]::UtcNow.ToUnixTimeSeconds()/300)
@@ -129,14 +141,19 @@ try {
   $last=TryValue {Get-Content $historyPath -Raw}
   if(!$last -or $last.Trim() -ne [string]$bucket) {
     $sample=@{at=@{'.sv'='timestamp'};cpu=$r.cpu;memory=$r.memory}
+    $stage='uploading history'
     $null=Invoke-RestMethod -Method Put -Uri ($base+'/monitoringHistory/'+$config.deviceId+'/'+($bucket%288)+'.json'+$suffix) -ContentType 'application/json' -Body ($sample | ConvertTo-Json -Depth 4 -Compress) -TimeoutSec 15
     [string]$bucket | Set-Content $historyPath
   }
-  if($token.refresh_token) {ProtectText $token.refresh_token | Set-Content (Join-Path $store 'credentials.dat')}
   'Last successful upload: '+[DateTime]::UtcNow.ToString('o') | Set-Content (Join-Path $store 'status.txt')
 } catch {
   # Do not write tokens, request URLs, device details or passwords to diagnostics.
-  if (!$Test -and (Test-Path $store)) {('Last attempt failed at '+[DateTime]::UtcNow.ToString('o')+'. Check network, device access and Firebase rules.') | Set-Content (Join-Path $store 'status.txt')}
+  if (!$Test -and (Test-Path $store)) {
+    $http=''; if($_.Exception.Response) {$http=[string][int]$_.Exception.Response.StatusCode}
+    ('Last attempt failed at '+[DateTime]::UtcNow.ToString('o')+'. Stage: '+$stage+'. Type: '+$_.Exception.GetType().Name+'. HTTP: '+$http) | Set-Content (Join-Path $store 'status.txt')
+  }
   if($Test) {Write-Error $_}
   exit 1
+} finally {
+  if($runLock) {$runLock.Dispose()}
 }

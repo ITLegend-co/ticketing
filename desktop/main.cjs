@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, shell, nativeImage } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, shell, nativeImage, dialog } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const smoke = process.argv.includes('--smoke-test');
@@ -13,7 +13,7 @@ if (smoke) {
 }
 const HOME = 'https://itlegend-co.github.io/ticketing/askjaslhrui3893478rehfsj38uhef/';
 const APP_ID = 'com.mountaintorq.ithelpdesk';
-let reminders;
+let reminders, updater;
 let win, tray, quitting = false, allowed = new Set(), account = '', retryTimer;
 const popups = require('./popup.cjs')((id, owner) => {
   if (!quitting && account === owner && allowed.has(id) && win && !win.isDestroyed()) {
@@ -36,11 +36,13 @@ function load() { if (win && !win.isDestroyed()) win.loadURL(HOME).catch(() => {
 function trayMenu() {
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Open helpdesk', click: show },
+    { label: 'Check for software updates', click: () => updater?.check(true) },
     { label: 'Preview UPS reminder', click: () => reminders?.preview() },
     { label: 'Start with Windows', type: 'checkbox', checked: app.getLoginItemSettings({ args: ['--hidden'] }).openAtLogin,
       click: item => { app.setLoginItemSettings({ openAtLogin: item.checked, args: ['--hidden'] }); trayMenu(); } },
     { label: 'Reload / reconnect', click: () => win.webContents.reloadIgnoringCache() },
     { label: 'Set up device monitoring', click: () => require('./monitoring-launch.cjs')() },
+    { label: 'Repair / update monitoring', click: () => require('./monitoring-launch.cjs')(false, true) },
     { label: 'Remove device monitoring', click: () => require('./monitoring-launch.cjs')(true) },
     { type: 'separator' },
     { label: 'Quit (stop notifications and reminders)', click: () => app.quit() },
@@ -50,7 +52,7 @@ app.setAppUserModelId(APP_ID);
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on('second-instance', show);
-  app.on('before-quit', () => { quitting = true; clearTimeout(retryTimer); clearNotices(); });
+  app.on('before-quit', () => { quitting = true; updater?.stop(); clearTimeout(retryTimer); clearNotices(); });
   app.on('window-all-closed', () => {});
   app.whenReady().then(() => {
     diagnostic('Electron ready');
@@ -84,6 +86,7 @@ else {
         fs.writeFileSync(startupFlag,'1');
       }
     }
+    if (!smoke && app.isPackaged) updater = require('./updates.cjs').createUpdater({app,dialog,shell});
     diagnostic('Creating tray');
     tray = new Tray(nativeImage.createFromPath(icon)); tray.setToolTip('Mountain Torq IT Helpdesk — running'); tray.on('double-click', show); trayMenu();
     ipcMain.on('mt-access', (event, data) => {

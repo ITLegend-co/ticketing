@@ -31,10 +31,13 @@ jobs:
           cache: npm
           cache-dependency-path: desktop/package-lock.json
       - name: Test notification routing
-        run: node --experimental-strip-types --test tests/desktop-notifications.test.mjs tests/reminder-core.test.mjs tests/reminder-offline.test.mjs
+        run: node --experimental-strip-types --test tests/desktop-notifications.test.mjs tests/reminder-core.test.mjs tests/reminder-offline.test.mjs tests/desktop-updates.test.mjs
       - name: Install desktop dependencies
         working-directory: desktop
         run: npm ci
+      - name: Test encrypted credential recovery and interrupted writes
+        shell: powershell
+        run: ./tests/monitoring-credentials.ps1
       - name: Test Windows collector (no upload)
         shell: powershell
         run: ./desktop/monitoring/Collect.ps1 -Test
