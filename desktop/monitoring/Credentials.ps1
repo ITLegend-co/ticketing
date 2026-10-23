@@ -15,9 +15,10 @@ function WriteAtomicText([string]$path,[string]$text) {
     $bytes=[Text.Encoding]::UTF8.GetBytes($text)
     $stream=[IO.File]::Open($temp,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
     try {$stream.Write($bytes,0,$bytes.Length);$stream.Flush($true)} finally {$stream.Dispose()}
-    if([IO.File]::Exists($path)) {[IO.File]::Replace($temp,$path,$null)} else {[IO.File]::Move($temp,$path)}
+    if([IO.File]::Exists($path)) {[IO.File]::Replace($temp,$path,($temp+'.old'))} else {[IO.File]::Move($temp,$path)}
   } finally {
     if([IO.File]::Exists($temp)) {[IO.File]::Delete($temp)}
+    if([IO.File]::Exists($temp+'.old')) {[IO.File]::Delete($temp+'.old')}
   }
 }
 function SaveDeviceCredential([string]$folder,[string]$token) {
