@@ -28,3 +28,8 @@
   .request-photos li {flex-wrap:wrap}
   .toast {max-width:calc(100vw - 24px);bottom:calc(16px + env(safe-area-inset-bottom))}
 }
+
+.outbox { padding:16px; border:1px solid #bfdbfe; border-radius:12px; background:#eff6ff; color:#1e3a8a; margin-bottom:16px; overflow-wrap:anywhere; }
+.outbox p { margin:8px 0; font-size:14px; }
+.outbox h3 { margin:0; }
+.outbox > div { border-top:1px solid #bfdbfe; padding:10px 0; }

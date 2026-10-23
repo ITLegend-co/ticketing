@@ -22,7 +22,7 @@ function doPost(event) {
       pollTicketNotifications();
       return output_({ ok: true });
     }
-    if (request.action === 'list') return output_({ ok: true, files: list_(access.ticketId) });
+    if (request.action === 'list') return output_({ ok: true, resumableUploads: true, files: list_(access.ticketId) });
     if (request.action === 'upload') return output_({ ok: true, file: upload_(request, access) });
     if (request.action === 'download') return output_({ ok: true, file: download_(request, access) });
     throw new Error('Unknown action.');
@@ -83,7 +83,7 @@ function ticketFolder_(ticketId, create) {
 }
 
 function fileInfo_(file) {
-  return { id: file.getId(), name: file.getName(), mime: file.getMimeType(), size: file.getSize(), createdAt: file.getDateCreated().getTime() };
+  return { id: file.getId(), name: file.getName().replace(/^[a-f0-9-]{36}--/, ''), mime: file.getMimeType(), size: file.getSize(), createdAt: file.getDateCreated().getTime() };
 }
 
 function list_(ticketId) {
@@ -114,11 +114,18 @@ function upload_(request, access) {
   const mime = detectedMime_(bytes);
   if (!mime || mime !== request.mime) throw new Error('Choose a JPG, PNG, or WebP photo.');
   const name = String(request.name || 'Photo').replace(/[\\/\x00-\x1f]/g, '_').slice(0, 120);
+  if (request.uploadId !== undefined && (typeof request.uploadId !== 'string' || !/^[a-f0-9-]{36}$/.test(request.uploadId))) throw new Error('Invalid upload ID.');
+  const storedName = request.uploadId ? request.uploadId + '--' + name : name;
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
+    const folder = ticketFolder_(access.ticketId, true);
+    if (request.uploadId) {
+      const existing = folder.getFilesByName(storedName);
+      if (existing.hasNext()) return fileInfo_(existing.next());
+    }
     if (list_(access.ticketId).length >= MAX_PHOTOS) throw new Error('A request can have up to 5 photos.');
-    const file = ticketFolder_(access.ticketId, true).createFile(Utilities.newBlob(bytes, mime, name));
+    const file = folder.createFile(Utilities.newBlob(bytes, mime, storedName));
     // No public sharing links are created; viewing also goes through authorization.
     return fileInfo_(file);
   } finally { lock.releaseLock(); }
@@ -175,3 +182,4 @@ function sendWelcome_(request) {
     return { ok: true };
   } finally { lock.releaseLock(); }
 }
+

@@ -1,3 +1,6 @@
+import Outbox from "./Outbox";
+import { saveQueued } from "./outbox-store";
+import { validatePhotos } from "./ticket-submission";
 import InstallApp from "./InstallApp";
 import Reminders from "./Reminders";
 import { useUpsReminders } from "./use-ups-reminders";
@@ -239,17 +242,15 @@ export default function App() {
         status: "Open", requesterId: user.uid, requester: profile.name, department: profile.department,
         technicianId: "", technician: "", createdAt: Date.now(), updatedAt: Date.now(),
       };
-      const result = await submitWithPhotos(ticketPhotos, async () => {
-        await set(ticketRef, newTicket);
-        return { ...newTicket, id: ticketRef.key! };
-      }, uploadPhoto, (index, total) => setSubmitProgress(`Uploading photo ${index} of ${total}…`));
-      wakeTicketNotifications(result.ticket.id);
-      setSelected(result.ticket);
-      setPhotoWarning(result.incomplete.length ? {
-        id: result.ticket.id,
-        message: `Your request was saved, but photo uploads were interrupted: ${issueMessage(result.error)} Check the Photos list below before adding missing pictures (${result.incomplete.map((file) => file.name).join(", ")}). You do not need to submit another request.`,
-      } : null);
-      setTicketPhotos([]); setCreateOpen(false); setPage("Tickets"); notify("Request submitted for IT Admin review.");
+      validatePhotos(ticketPhotos);
+      await saveQueued({
+        id: ticketRef.key!, uid: user.uid, ticket: newTicket,
+        photos: ticketPhotos.map(file => ({ id: crypto.randomUUID(), file })),
+        saved: false, attempted: false, message: "Saved on this device — waiting to send", createdAt: Date.now(),
+      });
+      setTicketPhotos([]); setCreateOpen(false); setPage("Tickets");
+      notify("Request saved in your outbox. It will send when connected.");
+      window.dispatchEvent(new Event("mt-outbox-send"));
     } catch (error) { setCreateError(issueMessage(error)); }
     finally { setBusy(false); setSubmitProgress(""); ticketSubmitting.current = false; }
   }
@@ -382,6 +383,7 @@ export default function App() {
     {menuOpen && <button className="sidebar-backdrop" aria-label="Close menu" onClick={() => setMenuOpen(false)}/>}
     <main className="main"><header className="topbar"><button className="icon-btn menu-btn" aria-label="Open menu" onClick={() => setMenuOpen(true)}><Menu size={21}/></button><span className="header-title">Mountain Torq IT Helpdesk · {operatorPortal ? "Staff portal" : "Request portal"}</span><span className="header-account">{profile.email}</span></header>
       <div className="content">
+        <Outbox uid={user.uid} />
         <div className="page-heading"><div><h1>{page === "Dashboard" ? `Welcome, ${displayName(profile.name)}` : !operatorPortal ? "My requests" : page}</h1><p>{page === "Dashboard" ? "Your helpdesk at a glance." : page === "Tickets" ? operatorPortal ? "Review and manage support requests." : "Submit a request and follow its progress." : page === "Device Monitoring" ? "Computer health and performance across your locations." : page === "UPS Reminders" ? "Schedule staff reminders and review acknowledgments." : "Manage helpdesk accounts."}</p></div>
           {page !== "Device Monitoring" && page !== "UPS Reminders" && <button className="primary-btn" onClick={() => { if (page === "Users") { setUserMode("create"); setUserError(""); setUserOpen(true); } else setCreateOpen(true); }}>{page === "Users" ? <UserPlus size={17}/> : <Plus size={17}/>} {page === "Users" ? "Create user" : "Submit request"}</button>}
         </div>
