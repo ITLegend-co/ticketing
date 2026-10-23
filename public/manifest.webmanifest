@@ -1,0 +1,19 @@
+{
+  "id": "/ticketing/",
+  "name": "Mountain Torq IT Helpdesk",
+  "short_name": "MT Helpdesk",
+  "description": "Submit and manage Mountain Torq support requests.",
+  "start_url": "/ticketing/",
+  "scope": "/ticketing/",
+  "display": "standalone",
+  "background_color": "#f5f7fb",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

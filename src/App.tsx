@@ -1,3 +1,4 @@
+import InstallApp from "./InstallApp";
 import Reminders from "./Reminders";
 import { useUpsReminders } from "./use-ups-reminders";
 import { useDesktopNotifications } from "./use-desktop-notifications";
@@ -48,14 +49,6 @@ const issueMessage = (error: unknown) => {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
 };
 
-function WindowsDownload() {
-  if (window.mtDesktop) return null;
-  return <div className="windows-download">
-    <a className="secondary-btn" href="https://github.com/ITLegend-co/ticketing/releases/download/desktop-v1.0.15/Mountain-Torq-IT-Helpdesk-Setup-1.0.15.exe" target="_blank" rel="noopener noreferrer"><Download size={17} aria-hidden="true"/>Download for Windows</a>
-    <p>Desktop app for all staff · Windows 10/11 (64-bit)</p>
-    <small>Get a separate popup with ticket updates and an Open ticket button.</small>
-  </div>;
-}
 
 function LoginScreen() {
   const [busy, setBusy] = useState(false);
@@ -86,7 +79,7 @@ function LoginScreen() {
       {notice && <div className="auth-message success"><Check size={15} />{notice}</div>}
       <button className="primary-btn login-submit" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
     </form>
-    <WindowsDownload/>
+    <InstallApp/>
   </section></main>;
 }
 
@@ -383,7 +376,7 @@ export default function App() {
           return <button key={name} className={`nav-item ${page === name ? "active" : ""}`} onClick={() => { setPage(name); setMenuOpen(false); }}><Icon size={18}/>{!operatorPortal && name === "Tickets" ? "My requests" : name}</button>;
         })}
       </nav>
-      <WindowsDownload/>
+      <InstallApp/>
       <div className="sidebar-user"><div className="avatar avatar-navy">{initials(displayName(profile.name))}</div><div><strong>{displayName(profile.name)}</strong><span>{profile.role}</span></div><button className="icon-btn" title="Sign out" aria-label="Sign out" onClick={() => signOut(auth)}><LogOut size={18}/></button></div>
     </aside>
     {menuOpen && <button className="sidebar-backdrop" aria-label="Close menu" onClick={() => setMenuOpen(false)}/>}
