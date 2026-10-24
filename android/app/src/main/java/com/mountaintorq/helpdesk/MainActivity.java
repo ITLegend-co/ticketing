@@ -17,6 +17,7 @@ import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity {
   private static final String HOME="https://itlegend-co.github.io/ticketing/";
+  private final java.util.concurrent.ExecutorService outboxExecutor=Executors.newSingleThreadExecutor();
   private WebView web;
   private ProgressBar progress;
   private LinearLayout offline;
@@ -73,6 +74,21 @@ public class MainActivity extends Activity {
       }
     });
     if(WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)){
+      WebViewCompat.addWebMessageListener(web,"MTOutbox",Collections.singleton("https://itlegend-co.github.io"),(view,event,origin,mainFrame,reply)->{
+        if(!mainFrame || !NavigationPolicy.trusted(view.getUrl()))return;
+        String data=event.getData();if(data==null||data.length()>36*1024*1024)return;
+        outboxExecutor.execute(()->{
+          JSONObject response=new JSONObject();
+          try{JSONObject request=new JSONObject(data);response.put("requestId",request.getString("requestId"));response.put("result",OutboxBridge.handle(getApplicationContext(),request)).put("ok",true);
+            if("enqueue".equals(request.optString("action")))runOnUiThread(()->{
+              if(android.os.Build.VERSION.SDK_INT>=33 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED && !getPreferences(0).getBoolean("askedUploads",false)){
+                getPreferences(0).edit().putBoolean("askedUploads",true).apply();requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},12);
+              }
+            });
+          }catch(Exception e){try{response.put("ok",false);}catch(Exception ignored){}}
+          runOnUiThread(()->{if(!isDestroyed())reply.postMessage(response.toString());});
+        });
+      });
       WebViewCompat.addWebMessageListener(web,"MTFile",Collections.singleton("https://itlegend-co.github.io"),(view,messageEvent,origin,mainFrame,reply)->{
         if(!mainFrame || !NavigationPolicy.trusted(view.getUrl()))return;
         try {
@@ -134,5 +150,6 @@ public class MainActivity extends Activity {
   }
   @Override public void onBackPressed(){if(web.canGoBack())web.goBack();else super.onBackPressed();}
   @Override protected void onSaveInstanceState(Bundle state){web.saveState(state);super.onSaveInstanceState(state);}
-  @Override protected void onDestroy(){if(chooser!=null){chooser.onReceiveValue(null);chooser=null;}web.destroy();super.onDestroy();}
+  @Override protected void onDestroy(){if(chooser!=null){chooser.onReceiveValue(null);chooser=null;}outboxExecutor.shutdown();web.destroy();super.onDestroy();}
 }
+

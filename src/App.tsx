@@ -1,3 +1,4 @@
+import { hasNativeOutbox, nativeSession, nativeEnqueue } from "./native-outbox";
 import Outbox from "./Outbox";
 import { saveQueued } from "./outbox-store";
 import { validatePhotos } from "./ticket-submission";
@@ -52,6 +53,11 @@ const issueMessage = (error: unknown) => {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
 };
 
+
+async function logout() {
+  if (hasNativeOutbox()) await nativeSession("");
+  await signOut(auth);
+}
 
 function LoginScreen() {
   const [busy, setBusy] = useState(false);
@@ -163,6 +169,7 @@ export default function App() {
   const notify = (message: string) => { setToast(message); window.setTimeout(() => setToast(""), 4500); };
 
   useEffect(() => onAuthStateChanged(auth, (next) => {
+    if (!next && hasNativeOutbox()) void nativeSession("").catch(() => {});
     ticketsReady.current = false;
     setUser(next); setProfile(null); setProfileLoading(!!next); setAuthLoading(false);
     setCredentials(null); setUserOpen(false); setUserError("");
@@ -239,11 +246,24 @@ export default function App() {
         technicianId: "", technician: "", createdAt: Date.now(), updatedAt: Date.now(),
       };
       validatePhotos(ticketPhotos);
-      await saveQueued({
+      const queued = {
         id: ticketRef.key!, uid: user.uid, ticket: newTicket,
         photos: ticketPhotos.map(file => ({ id: crypto.randomUUID(), file })),
         saved: false, attempted: false, message: "Saved on this device — waiting to send", createdAt: Date.now(),
-      });
+      };
+      await saveQueued(queued);
+      if (hasNativeOutbox()) {
+        setSubmitProgress("Saving for background upload…");
+        try {
+          await nativeSession(user.uid, user.refreshToken);
+          const status = await nativeEnqueue(queued);
+          queued.message = status.message || "Saved for background upload";
+          await saveQueued(queued);
+        } catch {
+          queued.message = "Background transfer not confirmed. Keep this app open and tap Retry now.";
+          await saveQueued(queued).catch(() => {});
+        }
+      }
       setTicketPhotos([]); setCreateOpen(false); setPage("Tickets");
       notify("Request saved in your outbox. It will send when connected.");
       window.dispatchEvent(new Event("mt-outbox-send"));
@@ -359,10 +379,10 @@ export default function App() {
 
   if (authLoading || profileLoading) return <div className="auth-loading">Loading helpdesk…</div>;
   if (!user) return <LoginScreen />;
-  if (!profile) return <main className="access-denied"><CircleAlert size={28} /><h1>Account access is not configured</h1><p>{loadError || "Your account needs a helpdesk user profile. Ask an IT Administrator to add your account."}</p><button className="secondary-btn" onClick={() => signOut(auth)}>Sign out</button></main>;
-  if (profile.status !== "Active") return <main className="access-denied"><CircleAlert size={28} /><h1>Account suspended</h1><p>Contact an IT Administrator to restore access.</p><button className="secondary-btn" onClick={() => signOut(auth)}>Sign out</button></main>;
+  if (!profile) return <main className="access-denied"><CircleAlert size={28} /><h1>Account access is not configured</h1><p>{loadError || "Your account needs a helpdesk user profile. Ask an IT Administrator to add your account."}</p><button className="secondary-btn" onClick={() => logout()}>Sign out</button></main>;
+  if (profile.status !== "Active") return <main className="access-denied"><CircleAlert size={28} /><h1>Account suspended</h1><p>Contact an IT Administrator to restore access.</p><button className="secondary-btn" onClick={() => logout()}>Sign out</button></main>;
 
-  if (operatorPortal && !isStaffRole(profile.role)) return <main className="access-denied"><ShieldCheck size={28}/><h1>Staff access only</h1><p>Use the request portal to submit and track your support requests.</p><a className="primary-btn" href={import.meta.env.BASE_URL}>Open request portal</a><button className="secondary-btn" onClick={() => signOut(auth)}>Sign out</button></main>;
+  if (operatorPortal && !isStaffRole(profile.role)) return <main className="access-denied"><ShieldCheck size={28}/><h1>Staff access only</h1><p>Use the request portal to submit and track your support requests.</p><a className="primary-btn" href={import.meta.env.BASE_URL}>Open request portal</a><button className="secondary-btn" onClick={() => logout()}>Sign out</button></main>;
 
   return <div className="app-shell">
     <aside className={`sidebar ${menuOpen ? "mobile-open" : ""}`}>
@@ -374,7 +394,7 @@ export default function App() {
         })}
       </nav>
       <InstallApp/>
-      <div className="sidebar-user"><div className="avatar avatar-navy">{initials(displayName(profile.name))}</div><div><strong>{displayName(profile.name)}</strong><span>{profile.role}</span></div><button className="icon-btn" title="Sign out" aria-label="Sign out" onClick={() => signOut(auth)}><LogOut size={18}/></button></div>
+      <div className="sidebar-user"><div className="avatar avatar-navy">{initials(displayName(profile.name))}</div><div><strong>{displayName(profile.name)}</strong><span>{profile.role}</span></div><button className="icon-btn" title="Sign out" aria-label="Sign out" onClick={() => logout()}><LogOut size={18}/></button></div>
     </aside>
     {menuOpen && <button className="sidebar-backdrop" aria-label="Close menu" onClick={() => setMenuOpen(false)}/>}
     <main className="main"><header className="topbar"><button className="icon-btn menu-btn" aria-label="Open menu" onClick={() => setMenuOpen(true)}><Menu size={21}/></button><span className="header-title">Mountain Torq IT Helpdesk · {operatorPortal ? "Staff portal" : "Request portal"}</span><span className="header-account">{profile.email}</span></header>
@@ -467,3 +487,4 @@ export default function App() {
     {toast && <div className="toast" role="status"><Check size={17}/>{toast}</div>}
   </div>;
 }
+
