@@ -174,7 +174,7 @@ export default function App() {
     }, (error) => { setProfile(null); setProfileLoading(false); setLoadError(issueMessage(error)); });
   }, [user]);
   useEffect(() => {
-    if (!window.mtDesktop || !user || !profile || profile.status !== "Active") return;
+    if (!user || !profile || profile.status !== "Active") return;
     if (operatorPortal !== isStaffRole(profile.role)) {
       const destination = new URL(portalLink(import.meta.env.BASE_URL, window.location.origin, profile.role, ""));
       destination.searchParams.delete("email");

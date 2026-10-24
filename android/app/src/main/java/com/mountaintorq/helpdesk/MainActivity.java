@@ -31,14 +31,6 @@ public class MainActivity extends Activity {
       v.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());
       return insets;
     });
-    LinearLayout tools=new LinearLayout(this);
-    Button back=new Button(this);back.setText("Back");back.setOnClickListener(v->onBackPressed());
-    Button reload=new Button(this);reload.setText("Reload");reload.setOnClickListener(v->retry());
-    Button browser=new Button(this);browser.setText("Browser");browser.setOnClickListener(v->external(NavigationPolicy.trusted(web.getUrl())?web.getUrl():HOME));
-    tools.addView(back,new LinearLayout.LayoutParams(0,48*getResources().getDisplayMetrics().densityDpi/160,1));
-    tools.addView(reload,new LinearLayout.LayoutParams(0,LinearLayout.LayoutParams.WRAP_CONTENT,1));
-    tools.addView(browser,new LinearLayout.LayoutParams(0,LinearLayout.LayoutParams.WRAP_CONTENT,1));
-    root.addView(tools);
     progress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);
     root.addView(progress,new LinearLayout.LayoutParams(-1,6));
     offline=new LinearLayout(this);offline.setOrientation(LinearLayout.VERTICAL);offline.setPadding(32,48,32,32);
@@ -102,12 +94,12 @@ public class MainActivity extends Activity {
           Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);save.setType(mime);save.addCategory(Intent.CATEGORY_OPENABLE);
           save.putExtra(Intent.EXTRA_TITLE,"Helpdesk-download"+extension);
           startActivityForResult(save,11);
-        }catch(Exception e){pendingDownload=null;toast("Could not save this file. Use Browser to download it.");}
+        }catch(Exception e){pendingDownload=null;toast("Could not save this file. Open the helpdesk website in your browser to download it.");}
       });
     }
     web.setDownloadListener((url,ua,disposition,mime,length)->{
       if(url.startsWith("blob:https://itlegend-co.github.io/") && NavigationPolicy.trusted(web.getUrl()) && WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)){
-        String script="fetch("+JSONObject.quote(url)+").then(r=>r.blob()).then(b=>{if(b.size>25165824)throw Error();const f=new FileReader();f.onload=()=>MTFile.postMessage(JSON.stringify({mime:b.type,data:f.result.split(',')[1]}));f.readAsDataURL(b)}).catch(()=>alert('Use Browser to download this file.'));";
+        String script="fetch("+JSONObject.quote(url)+").then(r=>r.blob()).then(b=>{if(b.size>25165824)throw Error();const f=new FileReader();f.onload=()=>MTFile.postMessage(JSON.stringify({mime:b.type,data:f.result.split(',')[1]}));f.readAsDataURL(b)}).catch(()=>alert('Open the helpdesk website in your browser to download this file.'));";
         web.evaluateJavascript(script,null);
       } else external(url);
     });
