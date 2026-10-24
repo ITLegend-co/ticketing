@@ -89,6 +89,9 @@ function LoginScreen() {
 export default function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  // The authenticated profile selects the workspace on every device and entry URL.
+  // Firebase rules continue to authorize each read and write.
+  const operatorPortal = profile?.status === "Active" && isStaffRole(profile.role);
   const [authLoading, setAuthLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
   const [users, setUsers] = useState<Profile[]>([]);
@@ -174,15 +177,8 @@ export default function App() {
     }, (error) => { setProfile(null); setProfileLoading(false); setLoadError(issueMessage(error)); });
   }, [user]);
   useEffect(() => {
-    if (!user || !profile || profile.status !== "Active") return;
-    if (operatorPortal !== isStaffRole(profile.role)) {
-      const destination = new URL(portalLink(import.meta.env.BASE_URL, window.location.origin, profile.role, ""));
-      destination.searchParams.delete("email");
-      const ticketId = new URLSearchParams(window.location.search).get("ticket");
-      if (ticketId) destination.searchParams.set("ticket", ticketId);
-      window.location.replace(destination.href);
-    }
-  }, [user, profile?.role, profile?.status]);
+    setPage(operatorPortal ? "Dashboard" : "Tickets");
+  }, [user?.uid, operatorPortal]);
 
   useEffect(() => {
     if (!user || !profile || profile.status !== "Active") { setTickets([]); setTicketsLoading(false); return; }

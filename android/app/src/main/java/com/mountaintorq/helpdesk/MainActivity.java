@@ -41,6 +41,8 @@ public class MainActivity extends Activity {
     setContentView(root);
     WebSettings settings=web.getSettings();
     settings.setJavaScriptEnabled(true);settings.setDomStorageEnabled(true);
+    // Fetch current hosted code after app upgrades without clearing login or the outbox.
+    settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
     settings.setAllowFileAccess(false);settings.setAllowContentAccess(true);
     settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
     settings.setUserAgentString(settings.getUserAgentString()+" MountainTorqAndroid/"+BuildConfig.VERSION_NAME);
