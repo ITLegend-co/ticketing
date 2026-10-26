@@ -33,7 +33,7 @@ final class OutboxBridge {
         row.put("message","Waiting for internet / Android background scheduler");BackgroundStore.write(c,name,row);
       }
       if(row==null)return new JSONObject().put("missing",true);
-      if(!row.optBoolean("done"))UploadWorker.schedule(c,name);
+      if(!row.optBoolean("done"))UploadWorker.schedule(c,name,"retry".equals(action));
       int pending=0;JSONArray photos=row.getJSONArray("photos");for(int i=0;i<photos.length();i++)if(!photos.getJSONObject(i).optBoolean("sent"))pending++;
       return new JSONObject().put("done",row.optBoolean("done")).put("saved",row.optBoolean("saved")).put("pending",pending).put("message",row.optString("message"));
     }

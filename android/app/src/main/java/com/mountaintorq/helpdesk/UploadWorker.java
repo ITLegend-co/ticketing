@@ -16,8 +16,17 @@ public class UploadWorker extends Worker {
   static final String DRIVE="https://script.google.com/macros/s/AKfycbwWdD-gbK8HmtIAI_Sf9qM4zBKvOtO7jHPCtypiAyYVCGcrf5NNGu3XJ2WLdukkSc67ZQ/exec";
   public UploadWorker(Context c,WorkerParameters p){super(c,p);}
   static void schedule(Context c,String name)throws Exception{
+    schedule(c,name,false);
+  }
+  static void schedule(Context c,String name,boolean retry)throws Exception{
+    ExistingWorkPolicy policy=ExistingWorkPolicy.KEEP;
+    if(retry){
+      boolean running=false;
+      for(WorkInfo info:WorkManager.getInstance(c).getWorkInfosForUniqueWork(name).get())if(info.getState()==WorkInfo.State.RUNNING)running=true;
+      if(!running)policy=ExistingWorkPolicy.REPLACE;
+    }
     OneTimeWorkRequest work=new OneTimeWorkRequest.Builder(UploadWorker.class).setInputData(new Data.Builder().putString("record",name).build()).setConstraints(new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).setBackoffCriteria(BackoffPolicy.EXPONENTIAL,30,TimeUnit.SECONDS).build();
-    WorkManager.getInstance(c).enqueueUniqueWork(name,ExistingWorkPolicy.KEEP,work).getResult().get();
+    WorkManager.getInstance(c).enqueueUniqueWork(name,policy,work).getResult().get();
   }
   static String enc(String s)throws Exception{return URLEncoder.encode(s,"UTF-8");}
   private String uid,sessionId;
@@ -67,9 +76,10 @@ public class UploadWorker extends Worker {
         if(records.has(id))verify(records.getJSONObject(id),ticket);
         else{
           ticket.put("requester",profile.getString("name")).put("department",profile.getString("department"));
-          active();Response result=request(DB+"/tickets/"+id+suffix,"PUT",ticket.toString(),"null_etag");
+          active();Response result=request(DB+"/tickets/"+id+suffix,"PUT",ticket.toString(),creationMatch(profile.optString("role")));
           if(result.code==412)verify(result.json(),ticket);
-          else if(result.code!=200)throw new Problem("Ticket could not be confirmed. Waiting to retry.");
+          else if(result.code==401||result.code==403)throw new Problem("Access denied. Ask IT to check your account permissions; your request is kept.");
+          else if(result.code!=200)throw new Problem("Server could not confirm the ticket. Waiting to retry.");
         }
         row.put("saved",true);BackgroundStore.write(c,name,row);
       }
@@ -88,6 +98,7 @@ public class UploadWorker extends Worker {
       return Result.retry();
     }
   }
+  static String creationMatch(String role){return "IT Admin".equals(role)||"Management".equals(role)?"null_etag":null;}
   static void verify(JSONObject existing,JSONObject ticket)throws Exception{
     if(!existing.optString("requesterId").equals(ticket.getString("requesterId"))||existing.optLong("createdAt")!=ticket.getLong("createdAt"))throw new Problem("Request ID conflict. Contact IT.");
   }

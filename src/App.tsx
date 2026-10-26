@@ -238,7 +238,7 @@ export default function App() {
   const selectedLive = selected ? tickets.find((item) => item.id === selected.id) || selected : null;
   const technicians = users.filter((item) => canWorkTickets(item.role) && item.status === "Active");
 
-  async function createDesktopTicket(event: FormEvent<HTMLFormElement>) {
+  async function createOnlineTicket(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!user || !profile || busy || ticketSubmitting.current) return;
     if (!navigator.onLine) { setCreateError("No internet connection. Connect to the internet and try again."); return; }
@@ -286,7 +286,7 @@ export default function App() {
   }
 
   async function createTicket(event: FormEvent<HTMLFormElement>) {
-    if (window.mtDesktop) return createDesktopTicket(event);
+    if (window.mtDesktop || navigator.onLine) return createOnlineTicket(event);
     event.preventDefault();
     if (!user || !profile || busy || ticketSubmitting.current) return;
     const data = new FormData(event.currentTarget);

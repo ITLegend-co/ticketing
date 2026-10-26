@@ -3,10 +3,11 @@ export type QueuedTicket = {
   photos: { id: string; file: File; sent?: boolean }[];
   saved: boolean; attempted: boolean; message: string; createdAt: number;
 };
-// A retry always uses the original ID. Never replace a ticket that IT has already edited.
-export async function createOnce(url: string, ticket: Record<string, any>, request: typeof fetch = fetch) {
+// Callers first check delivery using the owner-filtered read. Employee rules reject
+// updates to existing tickets. Accounts with direct read access also use an ETag guard.
+export async function createOnce(url: string, ticket: Record<string, any>, request: typeof fetch = fetch, conditional = false) {
   const response = await request(url, {
-    method: "PUT", headers: { "Content-Type": "application/json", "if-match": "null_etag" },
+    method: "PUT", headers: { "Content-Type": "application/json", ...(conditional ? { "if-match": "null_etag" } : {}) },
     body: JSON.stringify(ticket), signal: AbortSignal.timeout(25000),
   });
   if (response.ok) return;

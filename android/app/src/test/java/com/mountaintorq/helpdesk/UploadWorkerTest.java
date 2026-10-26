@@ -4,6 +4,12 @@ import org.json.JSONObject;
 import static org.junit.Assert.*;
 
 public class UploadWorkerTest {
+  @Test public void staffWritesDoNotRequireDirectReadPermission(){
+    assertNull(UploadWorker.creationMatch("Employee"));
+    assertNull(UploadWorker.creationMatch("IT Technician"));
+    assertEquals("null_etag",UploadWorker.creationMatch("IT Admin"));
+    assertEquals("null_etag",UploadWorker.creationMatch("Management"));
+  }
   @Test public void lostAcknowledgementAcceptsSameTicketAfterITUpdates()throws Exception{
     JSONObject original=new JSONObject().put("requesterId","owner").put("createdAt",123);
     JSONObject existing=new JSONObject(original.toString()).put("status","Resolved").put("technicianId","it");

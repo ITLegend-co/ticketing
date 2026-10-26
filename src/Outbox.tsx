@@ -14,7 +14,7 @@ export default function Outbox({ uid }: { uid: string }) {
     let stopped = false, running = false;
     const active = () => !stopped && navigator.onLine && auth.currentUser?.uid === uid;
     const refresh = async () => { const items = await listQueued(uid); if (!stopped) setRows(items); };
-    async function flush() {
+    async function flush(forceRetry = false) {
       if (running || stopped || auth.currentUser?.uid !== uid || (!navigator.onLine && !hasNativeOutbox())) return;
       running = true;
       try {
@@ -24,7 +24,7 @@ export default function Outbox({ uid }: { uid: string }) {
           await nativeSession(uid,account.refreshToken);
           for(const entry of await listQueued(uid)) {
             if(stopped || auth.currentUser?.uid!==uid)break;
-            const status=await nativeEnqueue(entry);
+            const status=await nativeEnqueue(entry, forceRetry);
             if(status.done){await removeQueued(entry.id);if(!stopped)setMessage(`Sent: ${entry.ticket.subject}`);}
             else {entry.message=status.message || "Saved for background upload";await saveQueued(entry);}
           }
@@ -63,7 +63,7 @@ export default function Outbox({ uid }: { uid: string }) {
                   }
                   const ticket = { ...entry.ticket, requester: profile.name, department: profile.department };
                   if (!active()) throw new Error("Waiting for connection.");
-                  await createOnce(`${firebaseConfig.databaseURL}/tickets/${entry.id}${suffix}`, ticket);
+                  await createOnce(`${firebaseConfig.databaseURL}/tickets/${entry.id}${suffix}`, ticket, fetch, profile.role === "IT Admin" || profile.role === "Management");
                   wakeTicketNotifications(entry.id);
                 },
                 upload: async photo => {
@@ -85,15 +85,16 @@ export default function Outbox({ uid }: { uid: string }) {
     }
     const changed = () => { void refresh().catch(error => setMessage(error.message)); };
     const reconnect = () => { setOnline(navigator.onLine); void flush(); };
+    const retryNow = () => { void flush(true); };
     const visible = () => { if (document.visibilityState === "visible") void flush(); };
     window.addEventListener("mt-outbox", changed);
-    window.addEventListener("mt-outbox-send", reconnect);
+    window.addEventListener("mt-outbox-send", retryNow);
     window.addEventListener("online", reconnect);
     window.addEventListener("offline", reconnect);
     document.addEventListener("visibilitychange", visible);
     changed(); void flush();
     const timer = window.setInterval(flush, 30000);
-    return () => { stopped = true; clearInterval(timer); window.removeEventListener("mt-outbox", changed); window.removeEventListener("mt-outbox-send", reconnect); window.removeEventListener("online", reconnect); window.removeEventListener("offline", reconnect); document.removeEventListener("visibilitychange", visible); };
+    return () => { stopped = true; clearInterval(timer); window.removeEventListener("mt-outbox", changed); window.removeEventListener("mt-outbox-send", retryNow); window.removeEventListener("online", reconnect); window.removeEventListener("offline", reconnect); document.removeEventListener("visibilitychange", visible); };
   }, [uid]);
   if (online && !rows.length && !message) return null;
   return <section className="outbox" aria-label="Saved requests" aria-live="polite">
