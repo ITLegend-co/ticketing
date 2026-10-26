@@ -1,3 +1,7 @@
+import SavedRequests from "./SavedRequests";
+import type { QueuedTicket } from "./outbox-core";
+import { removeQueued } from "./outbox-store";
+import { sendOnline } from "./send-online";
 import { hasNativeOutbox, nativeSession, nativeEnqueue } from "./native-outbox";
 import Outbox from "./Outbox";
 import { saveQueued } from "./outbox-store";
@@ -20,7 +24,7 @@ import TicketPhotoPicker from "./TicketPhotoPicker";
 import { driveReady, driveRequest, DrivePhoto, MAX_PHOTOS, uploadPhoto, sendUserWelcome, wakeTicketNotifications } from "./drive";
 import { submitWithPhotos } from "./ticket-submission";
 import { canUpdateTicket, isOperatorPath, isStaffRole, portalLink } from "./portal";
-import { auth, database, generateTemporaryPassword, provisionUser, sendUserPasswordReset } from "./firebase";
+import { auth, database, firebaseConfig, generateTemporaryPassword, provisionUser, sendUserPasswordReset } from "./firebase";
 import { Check, ChevronDown, CircleAlert, Clock3, Download, Filter, Headphones, LayoutDashboard, LogOut, Menu, Monitor, Plus, Search, ShieldCheck, Ticket, UserPlus, Users, X } from "lucide-react";
 
 type Role = "Employee" | "IT Technician" | "IT Admin" | "Management";
@@ -115,8 +119,11 @@ export default function App() {
   const [submitProgress, setSubmitProgress] = useState("");
   const [photoWarning, setPhotoWarning] = useState<{ id: string; message: string } | null>(null);
   const ticketSubmitting = useRef(false);
+  const [restored, setRestored] = useState<QueuedTicket | null>(null);
+  const pendingSubmission = useRef<{ id: string; ticket: Omit<TicketItem, "id"> } | null>(null);
   function closeCreate() {
     if (ticketSubmitting.current) return;
+    setRestored(null); pendingSubmission.current = null;
     setCreateOpen(false); setTicketPhotos([]); setCreateError("");
   }
   const [userOpen, setUserOpen] = useState(false);
@@ -171,6 +178,7 @@ export default function App() {
   useEffect(() => onAuthStateChanged(auth, (next) => {
     if (!next && hasNativeOutbox()) void nativeSession("").catch(() => {});
     ticketsReady.current = false;
+    setRestored(null); pendingSubmission.current = null;
     setUser(next); setProfile(null); setProfileLoading(!!next); setAuthLoading(false);
     setCredentials(null); setUserOpen(false); setUserError("");
     setSelected(null); setLinkError("");
@@ -230,7 +238,55 @@ export default function App() {
   const selectedLive = selected ? tickets.find((item) => item.id === selected.id) || selected : null;
   const technicians = users.filter((item) => canWorkTickets(item.role) && item.status === "Active");
 
+  async function createDesktopTicket(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!user || !profile || busy || ticketSubmitting.current) return;
+    if (!navigator.onLine) { setCreateError("No internet connection. Connect to the internet and try again."); return; }
+    const data = new FormData(event.currentTarget);
+    ticketSubmitting.current = true;
+    setBusy(true); setCreateError(""); setSubmitProgress("Submitting request…");
+    try {
+      const ticketRef = push(ref(database, "tickets"));
+      const newTicket: Omit<TicketItem, "id"> = {
+        subject: String(data.get("subject")).trim(), description: String(data.get("description")).trim(),
+        category: String(data.get("category")), priority: "Unreviewed", reviewedAt: 0, reviewedBy: "",
+        location: String(data.get("location")).trim(), impact: String(data.get("impact")),
+        status: "Open", requesterId: user.uid, requester: profile.name, department: profile.department,
+        technicianId: "", technician: "", createdAt: Date.now(), updatedAt: Date.now(),
+      };
+      validatePhotos(ticketPhotos);
+      if (!pendingSubmission.current) pendingSubmission.current = restored
+        ? { id: restored.id, ticket: restored.ticket as Omit<TicketItem, "id"> }
+        : { id: ticketRef.key!, ticket: newTicket };
+      const pending = pendingSubmission.current;
+      const result = await submitWithPhotos(ticketPhotos, async () => {
+        const token = await user.getIdToken();
+        if (auth.currentUser?.uid !== user.uid) throw new Error("Your account changed. Sign in again.");
+        const params = new URLSearchParams({ auth: token, orderBy: JSON.stringify("requesterId"), equalTo: JSON.stringify(user.uid) });
+        let response: Response;
+        try { response = await fetch(`${firebaseConfig.databaseURL}/tickets.json?${params}`, { signal: AbortSignal.timeout(25000) }); }
+        catch { throw new Error("No internet connection or server unreachable. Your form has been kept. Try again when connected."); }
+        if (!response.ok) throw new Error("Access denied while checking your requests. Ask IT Admin to check Firebase permissions.");
+        const existing = (await response.json())?.[pending.id];
+        if (existing) return { ...existing, id: pending.id } as TicketItem;
+        if (auth.currentUser?.uid !== user.uid) throw new Error("Your account changed. Sign in again.");
+        pending.ticket = { ...newTicket, createdAt: pending.ticket.createdAt };
+        await sendOnline(`${firebaseConfig.databaseURL}/tickets/${pending.id}.json?auth=${encodeURIComponent(token)}`, pending.ticket);
+        return { ...pending.ticket, id: pending.id };
+      }, (id, file) => uploadPhoto(id, file, restored?.photos.find(photo => photo.file === file)?.id), (index, total) => setSubmitProgress(`Uploading photo ${index} of ${total}…`));
+      wakeTicketNotifications(result.ticket.id);
+      setSelected(result.ticket);
+      setPhotoWarning(result.incomplete.length ? { id: result.ticket.id, message: "Ticket submitted, but some photos could not upload. Check the Photos list and add missing photos there; do not submit another ticket." } : null);
+      if (restored && !result.incomplete.length) await removeQueued(restored.id).catch(() => {});
+      pendingSubmission.current = null; setRestored(null);
+      setTicketPhotos([]); setCreateOpen(false); setPage("Tickets");
+      notify("Request submitted for IT Admin review.");
+    } catch (error) { setCreateError(issueMessage(error)); }
+    finally { setBusy(false); setSubmitProgress(""); ticketSubmitting.current = false; }
+  }
+
   async function createTicket(event: FormEvent<HTMLFormElement>) {
+    if (window.mtDesktop) return createDesktopTicket(event);
     event.preventDefault();
     if (!user || !profile || busy || ticketSubmitting.current) return;
     const data = new FormData(event.currentTarget);
@@ -399,7 +455,7 @@ export default function App() {
     {menuOpen && <button className="sidebar-backdrop" aria-label="Close menu" onClick={() => setMenuOpen(false)}/>}
     <main className="main"><header className="topbar"><button className="icon-btn menu-btn" aria-label="Open menu" onClick={() => setMenuOpen(true)}><Menu size={21}/></button><span className="header-title">Mountain Torq IT Helpdesk · {operatorPortal ? "Staff portal" : "Request portal"}</span><span className="header-account">{profile.email}</span></header>
       <div className="content">
-        <Outbox uid={user.uid} />
+        {window.mtDesktop ? <SavedRequests uid={user.uid} restore={entry => { setRestored(entry); pendingSubmission.current = null; setTicketPhotos(entry.photos.filter(p => !p.sent).map(p => p.file)); setCreateError(""); setCreateOpen(true); }} /> : <Outbox uid={user.uid} />}
         <div className="page-heading"><div><h1>{page === "Dashboard" ? `Welcome, ${displayName(profile.name)}` : !operatorPortal ? "My requests" : page}</h1><p>{page === "Dashboard" ? "Your helpdesk at a glance." : page === "Tickets" ? operatorPortal ? "Review and manage support requests." : "Submit a request and follow its progress." : page === "Device Monitoring" ? "Computer health and performance across your locations." : page === "UPS Reminders" ? "Schedule staff reminders and review acknowledgments." : "Manage helpdesk accounts."}</p></div>
           {page !== "Device Monitoring" && page !== "UPS Reminders" && <button className="primary-btn" onClick={() => { if (page === "Users") { setUserMode("create"); setUserError(""); setUserOpen(true); } else setCreateOpen(true); }}>{page === "Users" ? <UserPlus size={17}/> : <Plus size={17}/>} {page === "Users" ? "Create user" : "Submit request"}</button>}
         </div>
@@ -427,10 +483,10 @@ export default function App() {
       </div>
     </main>
     {createOpen && <div className="modal-layer" role="dialog" aria-modal="true" aria-label="Submit request"><button className="modal-backdrop" aria-label="Close request form" disabled={busy} onClick={closeCreate}/><form className="ticket-modal" onSubmit={createTicket}><div className="modal-heading"><div><h2>Submit support request</h2><p>Describe the issue so the IT team can help.</p></div><button type="button" className="icon-btn" aria-label="Close request form" disabled={busy} onClick={closeCreate}><X size={20}/></button></div><fieldset className="form-body" disabled={busy}>
-      <label className="full">Subject<input name="subject" required maxLength={160} autoFocus placeholder="Short summary of the issue"/></label><label className="full">Description<textarea name="description" required rows={4} placeholder="What happened, and how is it affecting your work?"/></label>
-      <label>Category<select name="category" required defaultValue=""><option value="" disabled>Select category</option><option>Hardware</option><option>Software</option><option>Network</option><option>Access</option><option>Email</option><option>Other</option></select></label>
+      <label className="full">Subject<input name="subject" defaultValue={restored?.ticket.subject || ""} required maxLength={160} autoFocus placeholder="Short summary of the issue"/></label><label className="full">Description<textarea name="description" defaultValue={restored?.ticket.description || ""} required rows={4} placeholder="What happened, and how is it affecting your work?"/></label>
+      <label>Category<select name="category" required defaultValue={restored?.ticket.category || ""}><option value="" disabled>Select category</option><option>Hardware</option><option>Software</option><option>Network</option><option>Access</option><option>Email</option><option>Other</option></select></label>
       <div className="request-review-info full">IT Admin will review your request, determine its priority, and assign an IT person.</div>
-      <label>Location<input name="location" placeholder="e.g. KK Office" required/></label><label>Business impact<select name="impact" defaultValue="Single User"><option>Single User</option><option>Multiple Users</option><option>Department</option><option>Entire Company</option></select></label>
+      <label>Location<input name="location" defaultValue={restored?.ticket.location || ""} placeholder="e.g. KK Office" required/></label><label>Business impact<select name="impact" defaultValue={restored?.ticket.impact || "Single User"}><option>Single User</option><option>Multiple Users</option><option>Department</option><option>Entire Company</option></select></label>
       {driveReady && <TicketPhotoPicker files={ticketPhotos} onChange={setTicketPhotos} disabled={busy}/>}
       {createError && <div className="auth-message error full" role="alert">{createError}</div>}
       {busy && <div className="submission-progress full" role="status">{submitProgress} Please keep this page open.</div>}
@@ -487,4 +543,5 @@ export default function App() {
     {toast && <div className="toast" role="status"><Check size={17}/>{toast}</div>}
   </div>;
 }
+
 
