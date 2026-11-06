@@ -1,3 +1,11 @@
+# In-app Android updates
+
+- Checks for newer Android releases when opening or returning to the app.
+- Adds Update now to download and open Android’s installation prompt.
+- Verifies the APK checksum, package name, signing certificate and newer version before installation.
+- Allows retrying failed downloads and cancelled installation without clearing app data.
+- Existing installations need this APK once to enable in-app updates for later releases.
+
 # Mobile ticket submission fixes
 
 - Online requests send immediately and open the submitted ticket, without an Outbox step.
@@ -6,3 +14,4 @@
 - Retry now restarts waiting Android uploads without duplicating an already running worker.
 - Access-denied errors are shown separately from connection failures.
 - Existing saved tickets and photos are preserved. Install this update over the existing app; do not uninstall or clear app data.
+

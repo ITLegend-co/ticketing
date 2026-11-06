@@ -5,10 +5,22 @@ import "./mobile.css";
 
 export default function InstallApp() {
   const [instructions,setInstructions]=useState(false);
+  const [windows,setWindows]=useState("https://github.com/ITLegend-co/ticketing/releases/latest");
   const [apk,setApk]=useState<string|null>(null);
   const platform=installPlatform(navigator.userAgent,navigator.platform,navigator.maxTouchPoints);
   const standalone=window.matchMedia("(display-mode: standalone)").matches || (navigator as Navigator & {standalone?:boolean}).standalone;
   useEffect(()=>{
+    if(platform==="windows"){
+      const controller=new AbortController();
+      fetch("https://api.github.com/repos/ITLegend-co/ticketing/releases/latest",{signal:controller.signal})
+        .then(r=>r.ok?r.json():null).then(data=>{
+          const version=/^desktop-v(\d+\.\d+\.\d+)$/.exec(data?.tag_name || "")?.[1];
+          const name="Mountain-Torq-IT-Helpdesk-Setup-"+version+".exe";
+          if(version && !data.draft && !data.prerelease && data.assets?.some((a:{name:string;size:number})=>a.name===name&&a.size>1000000))
+            setWindows("https://github.com/ITLegend-co/ticketing/releases/download/desktop-v"+version+"/"+name);
+        }).catch(()=>{});
+      return ()=>controller.abort();
+    }
     if(platform!=="android") return;
     const controller=new AbortController();
     fetch(import.meta.env.BASE_URL+"mobile-release.json",{cache:"no-store",signal:controller.signal})
@@ -18,7 +30,7 @@ export default function InstallApp() {
   if(window.mtDesktop || platform==="installed" || standalone) return null;
   return <section className="windows-download install-app" aria-label="Install helpdesk">
     {platform==="windows" ? <>
-      <a className="secondary-btn" href="https://github.com/ITLegend-co/ticketing/releases/download/desktop-v1.0.15/Mountain-Torq-IT-Helpdesk-Setup-1.0.15.exe"><Download size={18}/>Download for Windows</a>
+      <a className="secondary-btn" href={windows}><Download size={18}/>Download for Windows</a>
       <p>Windows 10/11 · Ticket update popups</p>
     </> : platform==="android" ? <>
       {apk ? <a className="primary-btn" href={apk}><Download size={18}/>Download Android APK</a> : <button className="secondary-btn" disabled>Android APK · Coming soon</button>}
@@ -34,3 +46,4 @@ export default function InstallApp() {
     </div>}
   </section>;
 }
+

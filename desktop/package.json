@@ -53,7 +53,10 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
     },
-    "publish": null,
+    "publish": {
+      "provider": "generic",
+      "url": "https://github.com/ITLegend-co/ticketing/releases/latest/download/"
+    },
     "extraResources": [
       {
         "from": "monitoring",
@@ -63,5 +66,9 @@
         ]
       }
     ]
+  },
+  "dependencies": {
+    "electron-updater": "6.8.11"
   }
 }
+

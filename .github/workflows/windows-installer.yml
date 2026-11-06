@@ -77,10 +77,15 @@ jobs:
           path: |
             desktop/release/*Setup*.exe
             desktop/release/SHA256SUMS.txt
+            desktop/release/latest.yml
+            desktop/release/*.blockmap
       - name: Publish installer release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $installer = (Get-ChildItem desktop/release/*Setup*.exe | Select-Object -First 1).FullName
-          gh release create "desktop-v1.0.${{ github.run_number }}" "$installer" desktop/release/SHA256SUMS.txt --target "${{ github.sha }}" --title "Windows Helpdesk 1.0.${{ github.run_number }}" --notes-file desktop/RELEASE-NOTES.md
+          if (!(Test-Path desktop/release/latest.yml)) { throw "Update metadata missing" }
+          $blockmap = (Get-ChildItem desktop/release/*.blockmap | Select-Object -First 1).FullName
+          gh release create "desktop-v1.0.${{ github.run_number }}" "$installer" desktop/release/SHA256SUMS.txt desktop/release/latest.yml "$blockmap" --latest --target "${{ github.sha }}" --title "Windows Helpdesk 1.0.${{ github.run_number }}" --notes-file desktop/RELEASE-NOTES.md
+

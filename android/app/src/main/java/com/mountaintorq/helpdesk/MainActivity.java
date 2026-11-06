@@ -19,6 +19,7 @@ public class MainActivity extends Activity {
   private static final String HOME="https://itlegend-co.github.io/ticketing/";
   private final java.util.concurrent.ExecutorService outboxExecutor=Executors.newSingleThreadExecutor();
   private WebView web;
+  private AppUpdates appUpdates;
   private ProgressBar progress;
   private LinearLayout offline;
   private ValueCallback<Uri[]> chooser;
@@ -38,6 +39,7 @@ public class MainActivity extends Activity {
     TextView message=new TextView(this);message.setText("Helpdesk could not load. Check your connection and tap Retry.");message.setTextSize(18);
     Button retry=new Button(this);retry.setText("Retry");retry.setOnClickListener(v->retry());
     offline.addView(message);offline.addView(retry);offline.setVisibility(View.GONE);root.addView(offline);
+    appUpdates=new AppUpdates(this,root);
     web=new WebView(this);root.addView(web,new LinearLayout.LayoutParams(-1,0,1));
     setContentView(root);
     WebSettings settings=web.getSettings();
@@ -148,8 +150,11 @@ public class MainActivity extends Activity {
       }
     }
   }
+  @Override protected void onResume(){super.onResume();if(appUpdates!=null)appUpdates.resume();}
+  @Override protected void onPause(){if(appUpdates!=null)appUpdates.pause();super.onPause();}
   @Override public void onBackPressed(){if(web.canGoBack())web.goBack();else super.onBackPressed();}
   @Override protected void onSaveInstanceState(Bundle state){web.saveState(state);super.onSaveInstanceState(state);}
-  @Override protected void onDestroy(){if(chooser!=null){chooser.onReceiveValue(null);chooser=null;}outboxExecutor.shutdown();web.destroy();super.onDestroy();}
+  @Override protected void onDestroy(){if(chooser!=null){chooser.onReceiveValue(null);chooser=null;}if(appUpdates!=null)appUpdates.close();outboxExecutor.shutdown();web.destroy();super.onDestroy();}
 }
+
 

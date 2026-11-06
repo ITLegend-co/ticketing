@@ -1,3 +1,11 @@
+# Automatic Windows updates
+
+- Downloads new Windows releases automatically in the background and verifies the installer checksum.
+- Offers Restart and update, or Later to install when quitting Helpdesk from the system tray.
+- Adds a Restart to install update tray action. Closing the window still keeps notifications and reminders running.
+- Keeps login, saved requests, and device enrolment data during upgrades.
+- Existing installations need this installer once to enable automatic updates for later releases.
+
 Windows 10/11 x64 installer for Mountain Torq IT Helpdesk.
 
 1. Download and run the Setup.exe, then sign in with your helpdesk account.
@@ -25,3 +33,4 @@ Monitoring reliability fix: encrypted credentials are verified before writing, s
 After installing this update, right-click the tray icon and choose Repair / update monitoring, approving Windows administrator access. Installing the app alone does not update the existing SYSTEM task. Repair retains the device identity and history. If the older credential file is already unreadable and no usable backup exists, use Set up device monitoring with the same enrollment JSON once; this update cannot reconstruct lost credentials. No Firebase rules or Apps Script change is required for this fix.
 
 Software update notifications: all desktop users receive a dialog for a newer published Windows release. Checks run after startup and every six hours while the app is running and online. Remind me later suppresses the same version for 24 hours across restarts. Check for software updates is available in the tray. Download update opens the official GitHub release page; installation is manual. Older versions must be upgraded once to receive future notices.
+

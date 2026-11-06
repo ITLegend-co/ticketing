@@ -37,6 +37,7 @@ function trayMenu() {
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Open helpdesk', click: show },
     { label: 'Check for software updates', click: () => updater?.check(true) },
+    { label: 'Restart to install update', enabled: !!updater?.ready, click: () => updater?.install() },
     { label: 'Preview UPS reminder', click: () => reminders?.preview() },
     { label: 'Start with Windows', type: 'checkbox', checked: app.getLoginItemSettings({ args: ['--hidden'] }).openAtLogin,
       click: item => { app.setLoginItemSettings({ openAtLogin: item.checked, args: ['--hidden'] }); trayMenu(); } },
@@ -86,7 +87,7 @@ else {
         fs.writeFileSync(startupFlag,'1');
       }
     }
-    if (!smoke && app.isPackaged) updater = require('./updates.cjs').createUpdater({app,dialog,shell});
+    if (!smoke && app.isPackaged) updater = require('./updates.cjs').createUpdater({app,dialog,changed: () => { if (tray) trayMenu(); }});
     diagnostic('Creating tray');
     tray = new Tray(nativeImage.createFromPath(icon)); tray.setToolTip('Mountain Torq IT Helpdesk — running'); tray.on('double-click', show); trayMenu();
     ipcMain.on('mt-access', (event, data) => {
@@ -125,3 +126,4 @@ else {
     load();
   });
 }
+
