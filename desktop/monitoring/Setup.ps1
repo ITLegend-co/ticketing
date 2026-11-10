@@ -1,4 +1,4 @@
-param([switch]$Remove,[switch]$Repair)
+param([switch]$Remove,[switch]$Repair,[switch]$Upgrade)
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Security
@@ -7,13 +7,40 @@ $store=Join-Path $env:ProgramData 'MountainTorqMonitoring'
 $taskName='Mountain Torq Device Monitoring'
 $taskPaused=$false
 . (Join-Path $PSScriptRoot 'Credentials.ps1')
+. (Join-Path $PSScriptRoot 'Version.ps1')
+$versionKey='HKLM:\SOFTWARE\MountainTorq\Monitoring'
 try {
   if(!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){throw 'Run setup as a Windows administrator.'}
   if((Test-Path $store) -and ((Get-Item $store).Attributes -band [IO.FileAttributes]::ReparsePoint)){throw 'Monitoring folder must not be a link.'}
   if($Remove) {
     if(Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue){Stop-ScheduledTask -TaskName $taskName;Unregister-ScheduledTask -TaskName $taskName -Confirm:$false}
     if(Test-Path $store){Remove-Item $store -Recurse -Force}
+    Remove-Item $versionKey -Recurse -Force -ErrorAction SilentlyContinue
     [Windows.Forms.MessageBox]::Show('Background monitoring removed. Ticketing is unchanged.','Mountain Torq') | Out-Null
+    exit 0
+  }
+  if($Upgrade) {
+    if(!(Test-Path (Join-Path $store 'config.json'))) {throw 'No existing enrollment. Use Set up device monitoring.'}
+    if(@(Get-ChildItem -LiteralPath $store -Force -Recurse | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count){throw 'Monitoring files must not be links.'}
+    $task=Get-ScheduledTask -TaskName $taskName -ErrorAction Stop
+    Disable-ScheduledTask -TaskName $taskName | Out-Null;$taskPaused=$true
+    Stop-ScheduledTask -TaskName $taskName
+    $files=@('Collect.ps1','Credentials.ps1')
+    try {
+      foreach($name in $files) {
+        Copy-Item (Join-Path $store $name) (Join-Path $store ($name+'.upgrade-backup')) -Force
+        Copy-Item (Join-Path $PSScriptRoot $name) (Join-Path $store ($name+'.upgrade-new')) -Force
+      }
+      foreach($name in $files) {Move-Item (Join-Path $store ($name+'.upgrade-new')) (Join-Path $store $name) -Force}
+      # Enrollment, encrypted credentials, task identity and schedule stay untouched.
+      $null=New-Item $versionKey -Force
+      Set-ItemProperty $versionKey -Name Version -Value $CollectorVersion
+    } catch {
+      foreach($name in $files) {if(Test-Path (Join-Path $store ($name+'.upgrade-backup'))) {Copy-Item (Join-Path $store ($name+'.upgrade-backup')) (Join-Path $store $name) -Force}}
+      throw
+    } finally {
+      foreach($name in $files) {Remove-Item (Join-Path $store ($name+'.upgrade-new')) -Force -ErrorAction SilentlyContinue}
+    }
     exit 0
   }
   if($Repair) {
@@ -67,6 +94,8 @@ try {
   Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $triggers -Settings $settings -User 'SYSTEM' -RunLevel Highest -Force | Out-Null
   Enable-ScheduledTask -TaskName $taskName | Out-Null
   $taskPaused=$false
+  $null=New-Item $versionKey -Force
+  Set-ItemProperty $versionKey -Name Version -Value $CollectorVersion
   Start-ScheduledTask -TaskName $taskName
   [Windows.Forms.MessageBox]::Show('Monitoring installed. Check Device Monitoring on the website in 1-2 minutes. Delete the downloaded enrollment file after setup.','Mountain Torq') | Out-Null
 } catch {
@@ -75,3 +104,4 @@ try {
 } finally {
   if($taskPaused) {Enable-ScheduledTask -TaskName $taskName | Out-Null;Start-ScheduledTask -TaskName $taskName}
 }
+

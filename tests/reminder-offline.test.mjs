@@ -22,7 +22,16 @@ test('cached schedule and unsent acknowledgments survive offline restart and acc
  const time=String(Math.floor(now.minute/60)).padStart(2,'0')+':'+String(now.minute%60).padStart(2,'0');
  const schedule={enabled:true,message:'Save work and turn off UPS',days:Object.fromEntries(['mon','tue','wed','thu','fri','sat','sun'].map(d=>[d,time]))};
  let a=app(),service=factory({app:a,senderOK:()=>true});service.sync('user-a',schedule);assert.ok(service.window);
+ const snoozeWindow=service.window;
+ ipc.emit('ups-action',{sender:snoozeWindow.webContents,senderFrame:snoozeWindow.webContents.mainFrame},'snooze');
+ service.tick();assert.equal(service.window,null,'snooze must suppress the next timer tick');
+ const snoozedState=JSON.parse(fs.readFileSync(path.join(root,'ups-reminders.json'),'utf8'));
+ assert.ok(snoozedState.done['user-a:'+now.date]?.snoozeUntil>Date.now());
+ // Advance past the snooze for the remaining offline/acknowledgment coverage.
+
+
  a.emit('before-quit');ipc.removeAllListeners();
+ snoozedState.done={};fs.writeFileSync(path.join(root,'ups-reminders.json'),JSON.stringify(snoozedState));
  a=app();service=factory({app:a,senderOK:()=>true});service.tick();assert.ok(service.window,'offline cached schedule should open');
  const win=service.window;ipc.emit('ups-action',{sender:win.webContents,senderFrame:win.webContents.mainFrame},'ack');
  assert.equal(service.pending.length,1);assert.equal(service.window,null);
@@ -33,3 +42,4 @@ test('cached schedule and unsent acknowledgments survive offline restart and acc
  a=app();service=factory({app:a,senderOK:()=>true});service.tick();assert.equal(service.window,null,'sign-out clears active schedule');
  a.emit('before-quit');ipc.removeAllListeners();fs.rmSync(root,{recursive:true,force:true});
 });
+

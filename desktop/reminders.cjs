@@ -26,7 +26,7 @@ module.exports=function createReminders({app,senderOK,smoke=false}){
    state.done[state.uid+':'+item.date]={acknowledgedAt:now};
    state.pending=state.pending.filter(a=>!(a.uid===state.uid&&a.date===item.date));
    state.pending.push({uid:state.uid,installationId:state.installationId,date:item.date,scheduledFor:item.scheduledFor,acknowledgedAt:now,hostname:os.hostname().slice(0,200)});
-  }else{state.done[item.date]={snoozeUntil:now+10*60000};}
+  }else{state.done[state.uid+':'+item.date]={snoozeUntil:now+10*60000};}
   persist();closePopup();
  }
  function open(item){
@@ -66,3 +66,4 @@ module.exports=function createReminders({app,senderOK,smoke=false}){
  app.on('before-quit',()=>{clearInterval(timer);clearTimeout(startupTimer);persist();closePopup();});
  return {get window(){return popup;},get pending(){return state.pending;},sync,bind,tick,preview:()=>open({preview:true,date:'2099-01-01',scheduledFor:'17:00',message:'Before you leave, please save your work, shut down your computer, and turn off your UPS.'})};
 };
+

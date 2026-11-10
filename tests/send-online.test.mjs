@@ -12,3 +12,7 @@ test('access and network errors are distinguished',async()=>{
  await assert.rejects(sendOnline('x',{},true,async()=>new Response('',{status:401})),/Access denied/);
  await assert.rejects(sendOnline('x',{},true,async()=>{throw new TypeError('network')}),/Delivery could not be confirmed/);
 });
+
+test('temporary server failures are distinguished from access denial',async()=>{
+ await assert.rejects(sendOnline('x',{},true,async()=>new Response('',{status:503})),/temporarily unavailable/);
+});

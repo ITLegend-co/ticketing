@@ -19,7 +19,7 @@ function service(previous = {}, current = { request: ticket }, options = {}) {
     PropertiesService: { getScriptProperties: () => ({ getProperty: name => properties[name] || null, setProperty: (name, value) => { properties[name] = value; }, deleteProperty: name => { delete properties[name]; } }) },
     ScriptApp: { getOAuthToken: () => 'owner-token', getProjectTriggers: () => triggers, newTrigger: handler => ({ timeBased: () => ({ everyMinutes: minutes => ({ create: () => triggers.push({ getHandlerFunction: () => handler, minutes }) }) }) }), deleteTrigger: trigger => triggers.splice(triggers.indexOf(trigger), 1) },
     GmailApp: { getAliases: () => options.aliases || ['itverif@mountaintorq.com'], sendEmail: (to, subject, body, settings) => {
-      if (options.failAt === sent.length) throw new Error('SMTP unavailable');
+      if (options.failAt === sent.length || options.failRecipient === to) throw new Error('SMTP unavailable');
       sent.push({ to, subject, body, settings });
     } },
     MailApp: { getRemainingDailyQuota: () => options.quota ?? 100 },
@@ -63,9 +63,12 @@ test('quota exhaustion preserves the queue for the next scheduled attempt', () =
 test('partial send failure persists recipients already sent and retries only the rest', () => {
   const settings = { failAt: 1 };
   const { context, sent, state, properties } = service({}, { request: ticket }, settings);
-  assert.throws(() => context.pollTicketNotifications(), /SMTP unavailable/);
+  context.pollTicketNotifications();
   assert.deepEqual(state().queue[0].sent, ['requester@example.com']);
   settings.failAt = -1;
+  const saved = context.loadMailState_();
+  Object.values(saved.state.queue[0].retries).forEach(r => { r.nextAt = 0; });
+  context.writeMailState_(saved.file, saved.state);
   delete properties.HELPDESK_LAST_MAIL_POLL;
   context.pollTicketNotifications();
   assert.deepEqual(sent.map(mail => mail.to), ['requester@example.com', 'tech@example.com', 'admin@example.com']);
@@ -109,4 +112,33 @@ test('stale queued assignment notifications do not go to an unassigned IT person
   const { context, sent } = service({ request: ticket }, { request: { ...ticket, technicianId: 'admin', technician: 'Admin' } });
   context.pollTicketNotifications();
   assert.deepEqual(sent.map(mail => mail.to), ['requester@example.com', 'admin@example.com']);
+});
+
+
+test('a permanently failing recipient does not block other recipients or tickets', () => {
+ const s=service({}, {first:ticket,second:{...ticket,subject:'Second'}}, {failRecipient:'requester@example.com'});
+ for(let i=0;i<5;i++) {
+  delete s.properties.HELPDESK_LAST_MAIL_POLL;
+  const saved=s.context.loadMailState_();
+  saved.state.queue.forEach(e=>Object.values(e.retries||{}).forEach(r=>{r.nextAt=0;}));
+  s.context.writeMailState_(saved.file,saved.state);
+  s.context.pollTicketNotifications();
+ }
+ assert.equal(s.sent.length,4);
+ assert.equal(s.state().queue.length,0);
+ assert.equal(s.state().failed.length,2);
+ assert.ok(s.state().failed.every(f=>f.attempts===5));
+ s.context.retryFailedNotifications();
+ assert.equal(s.state().failed.length,0);
+ assert.equal(s.state().queue.length,2);
+ assert.ok(s.state().queue.every(e=>e.retryOnly==='employee'));
+});
+test('recipient retry backoff is respected while later events continue',()=>{
+ const s=service({}, {first:ticket,second:ticket}, {failRecipient:'requester@example.com'});
+ s.context.pollTicketNotifications();
+ const before=s.state().queue[0].retries['requester@example.com'].attempts;
+ delete s.properties.HELPDESK_LAST_MAIL_POLL;
+ s.context.pollTicketNotifications();
+ assert.equal(s.state().queue[0].retries['requester@example.com'].attempts,before);
+ assert.equal(s.sent.length,4);
 });

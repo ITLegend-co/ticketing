@@ -73,3 +73,10 @@ Google's daily recipient quota still applies. Up to 20 recipients are processed 
 ## Pause/resume
 
 Run **stopNotifications** to pause both scheduled and website-triggered mail. Run **resumeNotifications** to restart without discarding history or pending mail.
+
+
+## Notification retry update (November 2026)
+
+Replace **Notifications.gs** with the repository version, save, then use **Deploy → Manage deployments → Edit → New version → Deploy** so website-triggered notifications use the same code as the scheduled trigger. Keep your existing script properties and state file; do not delete or reset them. No new OAuth scopes or Firebase rules are needed for this update.
+
+Each recipient now retries separately after 5, 10, 20 and 40 minutes. After the fifth failure it is retained in the state file's `failed` list, while other recipients and tickets continue. In the Apps Script editor, run **listFailedNotifications** to inspect failures. After correcting the cause, run **retryFailedNotifications** to requeue only those failed recipients. These functions are editor-only; they are not public website actions.

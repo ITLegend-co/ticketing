@@ -1,3 +1,4 @@
+import { bounded } from "./save-reply";
 import { auth } from './firebase';
 import config from './drive-config.json';
 export type DrivePhoto = { id: string; name: string; mime: string; size: number; createdAt: number };
@@ -9,7 +10,7 @@ export async function driveRequest<T>(ticketId: string, action: string, extra: o
   if (!driveReady) throw new Error('Photo uploads are currently unavailable.');
   if (!auth.currentUser) throw new Error('Sign in to access photos.');
   const account = auth.currentUser;
-  const idToken = await account.getIdToken();
+  const idToken = await bounded(account.getIdToken());
   if (auth.currentUser?.uid !== account.uid) throw new Error('Your account changed. Sign in again.');
   const response = await fetch(config.webAppUrl, {
     method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, redirect: 'follow', signal: AbortSignal.timeout(60000),
@@ -43,4 +44,5 @@ export function wakeTicketNotifications(ticketId: string) {
 export async function sendUserWelcome(userId: string, temporaryPassword: string) {
   return driveRequest(userId, 'welcome', { userId, temporaryPassword });
 }
+
 

@@ -17,3 +17,10 @@ No Firebase Database rule changes are required.
 ## Verification
 
 Automated tests cover access denial, a lost create acknowledgement, account isolation, resuming partial photo delivery, conditional create conflicts, and duplicate photo retries at the five-photo limit. Real-device offline/resume and photo picker testing is still required before broad rollout.
+
+
+## Offline startup and connection interruptions
+
+After installing this update, open the mobile app online and sign in once. The service worker saves only the static app shell; a minimal account-scoped name/department cache allows offline draft composition. Cached data never grants administrative access. On reconnect, Firebase and the background uploader verify the live profile before delivery. A first-ever launch still requires internet and sign-in. Browser/iOS queues require reopening the app to send; the Android native worker can continue in the background subject to Android scheduling.
+
+Mobile online submissions that lose their connection retain the same request ID in the outbox. Desktop new requests remain online-only. Reply/status writes use bounded requests and verify prior delivery before retrying the same reply ID. Failed photo uploads are saved separately on the device and can be retried with **Retry photos** without resending the ticket or reply. Do not clear app/browser data while requests or photos are pending.

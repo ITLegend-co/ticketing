@@ -163,9 +163,13 @@ function pollTicketNotifications() {
     const emails = registeredEmails_(Array.from(ids));
     let remaining = Math.min(20, MailApp.getRemainingDailyQuota());
     const started = Date.now();
-    while (state.queue.length && remaining > 0 && Date.now() - started < 45000) {
+    state.failed = state.failed || [];
+    let eventsLeft = state.queue.length;
+    while (state.queue.length && eventsLeft-- > 0 && remaining > 0 && Date.now() - started < 45000) {
       const event = state.queue[0];
-      const recipients = mailRecipients_(event, profiles, emails);
+      event.retries = event.retries || {};
+      event.failedRecipients = event.failedRecipients || [];
+      const recipients = mailRecipients_(event, profiles, emails).filter(function(person) { return !event.retryOnly || event.retryOnly === person.uid; });
       // Do not deliver an old assignment's details to someone who has lost access.
       const live = current[event.ticketId];
       const authorized = recipients.filter(function(person) {
@@ -176,17 +180,29 @@ function pollTicketNotifications() {
       for (let index = 0; index < authorized.length; index++) {
         const recipient = authorized[index];
         const address = recipient.email.toLowerCase();
-        if (event.sent.indexOf(address) !== -1) continue;
+        if (event.sent.indexOf(address) !== -1 || event.failedRecipients.indexOf(address) !== -1) continue;
+        const retry = event.retries[address];
+        if (retry && retry.nextAt > Date.now()) { complete = false; continue; }
         if (remaining <= 0) { complete = false; break; }
-        GmailApp.sendEmail(recipient.email,
-          '[Mountain Torq IT Helpdesk] ' + event.kind + ' #' + event.ticketId.slice(-7) + ' — ' + String(event.ticket.subject).replace(/[\r\n]/g, ' ').slice(0, 120),
-          mailBody_(event, recipient), { from: MAIL_SENDER, name: 'MT Adly', replyTo: MAIL_SENDER });
-        event.sent.push(address);
         remaining--;
+        try {
+          GmailApp.sendEmail(recipient.email,
+            '[Mountain Torq IT Helpdesk] ' + event.kind + ' #' + event.ticketId.slice(-7) + ' — ' + String(event.ticket.subject).replace(/[\r\n]/g, ' ').slice(0, 120),
+            mailBody_(event, recipient), { from: MAIL_SENDER, name: 'MT Adly', replyTo: MAIL_SENDER });
+          event.sent.push(address); delete event.retries[address];
+        } catch (error) {
+          const attempts = (retry ? retry.attempts : 0) + 1;
+          event.retries[address] = { attempts: attempts, nextAt: Date.now() + Math.min(3600000, 300000 * Math.pow(2, attempts - 1)) };
+          if (attempts >= 5) {
+            event.failedRecipients.push(address);
+            state.failed.push({ ticketId: event.ticketId, recipient: recipient.uid, email: address, failedAt: Date.now(), attempts: attempts,
+              error: String(error.message || error).slice(0, 500), event: JSON.parse(JSON.stringify(event)) });
+          } else complete = false;
+        }
         writeMailState_(saved.file, state);
       }
-      if (!complete) break;
       state.queue.shift();
+      if (!complete) state.queue.push(event);
       writeMailState_(saved.file, state);
     }
   } finally { lock.releaseLock(); }
@@ -202,4 +218,25 @@ function stopNotifications() {
 function resumeNotifications() {
   PropertiesService.getScriptProperties().deleteProperty('HELPDESK_MAIL_PAUSED');
   setupNotifications();
+}
+
+
+// Editor-only tools. Not exposed through the public web endpoint.
+function listFailedNotifications() {
+  const failed = loadMailState_().state.failed || [];
+  console.log(JSON.stringify(failed.map(function(item) {
+    return { ticketId: item.ticketId, recipient: item.email, attempts: item.attempts, failedAt: item.failedAt, error: item.error };
+  }), null, 2));
+}
+function retryFailedNotifications() {
+  const lock = LockService.getScriptLock(); lock.waitLock(30000);
+  try {
+    const saved = loadMailState_();
+    (saved.state.failed || []).forEach(function(item) {
+      const event = item.event;
+      event.sent = []; event.retries = {}; event.failedRecipients = []; event.retryOnly = item.recipient;
+      saved.state.queue.push(event);
+    });
+    saved.state.failed = []; writeMailState_(saved.file, saved.state);
+  } finally { lock.releaseLock(); }
 }

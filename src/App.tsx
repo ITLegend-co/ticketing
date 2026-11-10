@@ -1,3 +1,7 @@
+import { saveReply, bounded } from "./save-reply";
+import { subscribeTicketSources } from "./ticket-sources";
+import PendingPhotos from "./PendingPhotos";
+import { retainPhotos, sendRetainedPhoto } from "./pending-photos";
 import SavedRequests from "./SavedRequests";
 import type { QueuedTicket } from "./outbox-core";
 import { removeQueued } from "./outbox-store";
@@ -104,6 +108,7 @@ export default function App() {
   const operatorPortal = profile?.status === "Active" && isStaffRole(profile.role);
   const [authLoading, setAuthLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
+  const [offlineProfile, setOfflineProfile] = useState(false);
   const [users, setUsers] = useState<Profile[]>([]);
   const [tickets, setTickets] = useState<TicketItem[]>([]);
   const [ticketsLoading, setTicketsLoading] = useState(true);
@@ -137,12 +142,13 @@ export default function App() {
   const [copyFeedback, setCopyFeedback] = useState("");
   const [selected, setSelected] = useState<TicketItem | null>(null);
   const [ticketDraft, setTicketDraft] = useState<Partial<TicketItem>>({});
+  const pendingNote = useRef<{ ticketId: string; id: string; note: { text: string; author: string; authorId: string; createdAt: number }; fields: Partial<TicketItem>; canEdit: boolean } | null>(null);
   const [replyDraft, setReplyDraft] = useState("");
   const [replyPhotos, setReplyPhotos] = useState<File[]>([]);
   const [replyError, setReplyError] = useState("");
   const [replyProgress, setReplyProgress] = useState("");
   const [photoRevision, setPhotoRevision] = useState(0);
-  useEffect(() => { setTicketDraft({}); setReplyDraft(""); setReplyPhotos([]); setReplyError(""); setReplyProgress(""); }, [selected?.id]);
+  useEffect(() => { pendingNote.current = null; setTicketDraft({}); setReplyDraft(""); setReplyPhotos([]); setReplyError(""); setReplyProgress(""); }, [selected?.id]);
   function pasteReply(event: ClipboardEvent<HTMLTextAreaElement>) {
     if (!Array.from(event.clipboardData.items).some(item => item.kind === "file" && item.type.startsWith("image/"))) return;
     event.preventDefault();
@@ -187,31 +193,55 @@ export default function App() {
   }), []);
   useEffect(() => {
     if (!user) return;
-    return onValue(ref(database, `users/${user.uid}`), (snapshot) => {
-      setProfile(snapshot.exists() ? { id: user.uid, ...snapshot.val() } : null); setProfileLoading(false);
-    }, (error) => { setProfile(null); setProfileLoading(false); setLoadError(issueMessage(error)); });
+    const key = `mt-offline-profile:${user.uid}`;
+    let verified = false;
+    setOfflineProfile(false);
+    const fallback = () => {
+      if (verified || window.mtDesktop) return;
+      try {
+        const saved = JSON.parse(localStorage.getItem(key) || "null");
+        if (saved?.name && saved?.department) {
+          // Local identity is only for composing drafts, never for authorizing access.
+          setProfile({ id: user.uid, name: saved.name, department: saved.department, email: user.email || "", role: "Employee", status: "Active" });
+          setOfflineProfile(true); setProfileLoading(false);
+        }
+      } catch {}
+    };
+    if (!navigator.onLine) fallback();
+    const timer = window.setTimeout(fallback, 8000);
+    const stop = onValue(ref(database, `users/${user.uid}`), snapshot => {
+      verified = true; clearTimeout(timer); setOfflineProfile(false);
+      const value = snapshot.exists() ? { id: user.uid, ...snapshot.val() } : null;
+      setProfile(value); setProfileLoading(false);
+      try {
+        if (value?.status === "Active") localStorage.setItem(key, JSON.stringify({ name: value.name, department: value.department }));
+        else localStorage.removeItem(key);
+      } catch {}
+    }, error => {
+      verified = true; clearTimeout(timer); setOfflineProfile(false);
+      try { localStorage.removeItem(key); } catch {}
+      setProfile(null); setProfileLoading(false); setLoadError(issueMessage(error));
+    });
+    return () => { clearTimeout(timer); stop(); };
   }, [user]);
   useEffect(() => {
     setPage(operatorPortal ? "Dashboard" : "Tickets");
   }, [user?.uid, operatorPortal]);
 
   useEffect(() => {
-    if (!user || !profile || profile.status !== "Active") { setTickets([]); setTicketsLoading(false); return; }
+    if (!user || !profile || offlineProfile || profile.status !== "Active") { setTickets([]); setTicketsLoading(false); return; }
     ticketsReady.current = false;
     setTicketsLoading(true);
     if (operatorPortal && !isStaffRole(profile.role)) { setTickets([]); setTicketsLoading(false); return; }
-    const ticketQuery = !operatorPortal || profile.role === "Employee"
-      ? query(ref(database, "tickets"), orderByChild("requesterId"), equalTo(user.uid))
-      : profile.role === "IT Technician"
-        ? query(ref(database, "tickets"), orderByChild("technicianId"), equalTo(user.uid))
-        : ref(database, "tickets");
-    return onValue(ticketQuery, (snapshot) => {
-      const value = snapshot.val() || {};
-      setTickets(Object.entries(value).map(([id, item]) => ({ ...item as Omit<TicketItem, "id">, id })).sort((a, b) => b.createdAt - a.createdAt));
-      ticketsReady.current = true;
-      setTicketsLoading(false); setLoadError("");
-    }, (error) => { setTicketsLoading(false); setLoadError(issueMessage(error)); });
-  }, [user, profile?.id, profile?.role, profile?.status]);
+    const own = query(ref(database, "tickets"), orderByChild("requesterId"), equalTo(user.uid));
+    const sources = profile.role === "IT Technician"
+      ? [own, query(ref(database, "tickets"), orderByChild("technicianId"), equalTo(user.uid))]
+      : [!operatorPortal || profile.role === "Employee" ? own : ref(database, "tickets")];
+    return subscribeTicketSources(sources, onValue, (merged, ready) => {
+      setTickets(Object.entries(merged).map(([id, item]) => ({ ...item as Omit<TicketItem, "id">, id })).sort((a,b) => b.createdAt-a.createdAt));
+      ticketsReady.current = ready; setTicketsLoading(!ready); setLoadError("");
+    }, error => { setTicketsLoading(false); setLoadError(issueMessage(error)); });
+  }, [user, profile?.id, profile?.role, profile?.status, offlineProfile]);
   useEffect(() => {
     if (!operatorPortal || profile?.role !== "IT Admin") { setUsers([]); return; }
     return onValue(ref(database, "users"), (snapshot) => {
@@ -238,6 +268,21 @@ export default function App() {
   const selectedLive = selected ? tickets.find((item) => item.id === selected.id) || selected : null;
   const technicians = users.filter((item) => canWorkTickets(item.role) && item.status === "Active");
 
+  async function queueMobile(id: string, ticket: Omit<TicketItem, "id">, photos: File[]) {
+    if (!user || window.mtDesktop) throw new Error("No internet connection. Keep this form open and retry.");
+    const queued: QueuedTicket = { id, uid: user.uid, ticket,
+      photos: photos.map(file => ({ id: crypto.randomUUID(), file })), saved: false,
+      attempted: true, message: "Saved on this device — waiting to send", createdAt: Date.now() };
+    await saveQueued(queued);
+    if (hasNativeOutbox()) {
+      try { await nativeSession(user.uid, user.refreshToken); const status = await nativeEnqueue(queued); queued.message = status.message || "Saved for background upload"; }
+      catch { queued.message = "Saved locally. Open the app and tap Retry now if background sending does not start."; }
+      await saveQueued(queued);
+    }
+    pendingSubmission.current = null; setTicketPhotos([]); setCreateOpen(false); setPage("Tickets");
+    notify("Request saved in your outbox. It will send when connected.");
+    window.dispatchEvent(new Event("mt-outbox-send"));
+  }
   async function createOnlineTicket(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!user || !profile || busy || ticketSubmitting.current) return;
@@ -260,33 +305,41 @@ export default function App() {
         : { id: ticketRef.key!, ticket: newTicket };
       const pending = pendingSubmission.current;
       const result = await submitWithPhotos(ticketPhotos, async () => {
-        const token = await user.getIdToken();
+        const token = await bounded(user.getIdToken());
         if (auth.currentUser?.uid !== user.uid) throw new Error("Your account changed. Sign in again.");
         const params = new URLSearchParams({ auth: token, orderBy: JSON.stringify("requesterId"), equalTo: JSON.stringify(user.uid) });
         let response: Response;
         try { response = await fetch(`${firebaseConfig.databaseURL}/tickets.json?${params}`, { signal: AbortSignal.timeout(25000) }); }
         catch { throw new Error("No internet connection or server unreachable. Your form has been kept. Try again when connected."); }
-        if (!response.ok) throw new Error("Access denied while checking your requests. Ask IT Admin to check Firebase permissions.");
+        if (response.status === 401 || response.status === 403) throw new Error("Access denied while checking your requests. Ask IT Admin to check Firebase permissions.");
+        if (!response.ok) throw new Error("Connection to the ticket server is temporarily unavailable. Your form is kept.");
         const existing = (await response.json())?.[pending.id];
-        if (existing) return { ...existing, id: pending.id } as TicketItem;
+        if (existing) { await retainPhotos(user.uid, pending.id, ticketPhotos, file => restored?.photos.find(photo => photo.file === file)?.id); return { ...existing, id: pending.id } as TicketItem; }
         if (auth.currentUser?.uid !== user.uid) throw new Error("Your account changed. Sign in again.");
         pending.ticket = { ...newTicket, createdAt: pending.ticket.createdAt };
         await sendOnline(`${firebaseConfig.databaseURL}/tickets/${pending.id}.json?auth=${encodeURIComponent(token)}`, pending.ticket);
+        await retainPhotos(user.uid, pending.id, ticketPhotos, file => restored?.photos.find(photo => photo.file === file)?.id);
         return { ...pending.ticket, id: pending.id };
-      }, (id, file) => uploadPhoto(id, file, restored?.photos.find(photo => photo.file === file)?.id), (index, total) => setSubmitProgress(`Uploading photo ${index} of ${total}…`));
+      }, (id, file) => sendRetainedPhoto(id, file, uploadPhoto), (index, total) => setSubmitProgress(`Uploading photo ${index} of ${total}…`));
       wakeTicketNotifications(result.ticket.id);
       setSelected(result.ticket);
-      setPhotoWarning(result.incomplete.length ? { id: result.ticket.id, message: "Ticket submitted, but some photos could not upload. Check the Photos list and add missing photos there; do not submit another ticket." } : null);
-      if (restored && !result.incomplete.length) await removeQueued(restored.id).catch(() => {});
+      setPhotoWarning(result.incomplete.length ? { id: result.ticket.id, message: "Ticket submitted, but some photos could not upload. Use Retry photos below; the missing photos are kept on this device. Do not submit another ticket." } : null);
+      if (restored) await removeQueued(restored.id).catch(() => {});
       pendingSubmission.current = null; setRestored(null);
       setTicketPhotos([]); setCreateOpen(false); setPage("Tickets");
       notify("Request submitted for IT Admin review.");
-    } catch (error) { setCreateError(issueMessage(error)); }
+    } catch (error) {
+      const message = issueMessage(error);
+      if (!window.mtDesktop && pendingSubmission.current && /connection|network|server unreachable|fetch|timeout|timed out|auth\/network-request-failed/i.test(message)) {
+        try { await queueMobile(pendingSubmission.current.id, pendingSubmission.current.ticket, ticketPhotos); }
+        catch (saveError) { setCreateError(issueMessage(saveError)); }
+      } else setCreateError(message);
+    }
     finally { setBusy(false); setSubmitProgress(""); ticketSubmitting.current = false; }
   }
 
   async function createTicket(event: FormEvent<HTMLFormElement>) {
-    if (window.mtDesktop || navigator.onLine) return createOnlineTicket(event);
+    if (window.mtDesktop || (navigator.onLine && !offlineProfile)) return createOnlineTicket(event);
     event.preventDefault();
     if (!user || !profile || busy || ticketSubmitting.current) return;
     const data = new FormData(event.currentTarget);
@@ -350,32 +403,35 @@ export default function App() {
     }
     noteSubmitting.current = true; setNoteBusy(true); setReplyError(""); setReplyProgress("Saving reply…");
     try {
+      if (!navigator.onLine) throw new Error("No internet connection. Your reply and changes are kept. Retry when connected.");
       if (replyPhotos.length) {
         setReplyProgress("Checking attachments…");
         const { files } = await driveRequest<{ files: DrivePhoto[] }>(selectedLive.id, "list");
         if (files.length + replyPhotos.length > MAX_PHOTOS) throw new Error(`This ticket already has ${files.length} photos. A ticket can contain up to ${MAX_PHOTOS} photos in total.`);
       }
-      const noteRef = push(ref(database, `tickets/${selectedLive.id}/updates`));
-      const note = { text: value, author: profile.name, authorId: user.uid, createdAt: Date.now() };
+      if (!pendingNote.current) pendingNote.current = { ticketId: selectedLive.id,
+        id: push(ref(database, `tickets/${selectedLive.id}/updates`)).key!,
+        note: { text: value, author: profile.name, authorId: user.uid, createdAt: Date.now() }, fields, canEdit };
+      const pending = pendingNote.current;
       const result = await submitWithPhotos(replyPhotos, async () => {
-        if (canEdit) {
-          await update(ref(database, `tickets/${selectedLive.id}`), { ...fields, [`updates/${noteRef.key}`]: note });
-        } else {
-          // Requesters may append a reply, but have no ticket-field write permission.
-          await set(noteRef, note);
-        }
-        return { id: selectedLive.id };
-      }, uploadPhoto, (index, total) => setReplyProgress(`Uploading photo ${index} of ${total}…`));
+        const token = await bounded(user.getIdToken());
+        if (auth.currentUser?.uid !== user.uid) throw new Error("Your account changed. Sign in again.");
+        await saveReply({ base: firebaseConfig.databaseURL, token, uid: user.uid, role: profile.role,
+          requesterId: selectedLive.requesterId, ...pending });
+        await retainPhotos(user.uid, pending.ticketId, replyPhotos);
+        return { id: pending.ticketId };
+      }, (id, file) => sendRetainedPhoto(id, file, uploadPhoto), (index, total) => setReplyProgress(`Uploading photo ${index} of ${total}…`));
+      pendingNote.current = null;
       wakeTicketNotifications(selectedLive.id);
       form.reset(); setTicketDraft({}); setReplyDraft(""); setReplyPhotos([]);
       setPhotoRevision(revision => revision + 1);
       if (result.incomplete.length) {
-        setPhotoWarning({ id: selectedLive.id, message: `Your reply was saved, but some photos could not be confirmed: ${result.incomplete.map(file => file.name).join(", ")}. ${issueMessage(result.error)} Check the Photos list before adding missing pictures. Do not resend your reply.` });
+        setPhotoWarning({ id: selectedLive.id, message: `Your reply was saved, but some photos could not be confirmed: ${result.incomplete.map(file => file.name).join(", ")}. ${issueMessage(result.error)} Use Retry photos below. The photos are kept on this device; do not resend your reply.` });
         notify("Reply saved. Please check the photo upload warning.");
       } else {
         setPhotoWarning(null); notify("Reply and attachments saved. Email notification queued.");
       }
-    } catch (error) { setReplyError(issueMessage(error)); }
+    } catch (error) { setReplyError(issueMessage(error) + (pendingNote.current ? " Retry sends the same reply and changes to prevent duplicates." : "")); }
     finally { noteSubmitting.current = false; setNoteBusy(false); setReplyProgress(""); }
   }
   async function createUser(event: FormEvent<HTMLFormElement>) {
@@ -455,6 +511,8 @@ export default function App() {
     {menuOpen && <button className="sidebar-backdrop" aria-label="Close menu" onClick={() => setMenuOpen(false)}/>}
     <main className="main"><header className="topbar"><button className="icon-btn menu-btn" aria-label="Open menu" onClick={() => setMenuOpen(true)}><Menu size={21}/></button><span className="header-title">Mountain Torq IT Helpdesk · {operatorPortal ? "Staff portal" : "Request portal"}</span><span className="header-account">{profile.email}</span></header>
       <div className="content">
+        {offlineProfile && <p className="outbox">Offline draft mode — you can save a new request. Your account and access will be verified before it is sent.</p>}
+        <PendingPhotos uid={user.uid} busy={busy || noteBusy} onUploaded={() => { setPhotoRevision(revision => revision + 1); setPhotoWarning(null); }} />
         {window.mtDesktop ? <SavedRequests uid={user.uid} restore={entry => { setRestored(entry); pendingSubmission.current = null; setTicketPhotos(entry.photos.filter(p => !p.sent).map(p => p.file)); setCreateError(""); setCreateOpen(true); }} /> : <Outbox uid={user.uid} />}
         <div className="page-heading"><div><h1>{page === "Dashboard" ? `Welcome, ${displayName(profile.name)}` : !operatorPortal ? "My requests" : page}</h1><p>{page === "Dashboard" ? "Your helpdesk at a glance." : page === "Tickets" ? operatorPortal ? "Review and manage support requests." : "Submit a request and follow its progress." : page === "Device Monitoring" ? "Computer health and performance across your locations." : page === "UPS Reminders" ? "Schedule staff reminders and review acknowledgments." : "Manage helpdesk accounts."}</p></div>
           {page !== "Device Monitoring" && page !== "UPS Reminders" && <button className="primary-btn" onClick={() => { if (page === "Users") { setUserMode("create"); setUserError(""); setUserOpen(true); } else setCreateOpen(true); }}>{page === "Users" ? <UserPlus size={17}/> : <Plus size={17}/>} {page === "Users" ? "Create user" : "Submit request"}</button>}
@@ -530,7 +588,7 @@ export default function App() {
       {photoWarning?.id === selectedLive.id && <div className="auth-message error attachment-warning" role="alert">{photoWarning.message}</div>}
       <DriveAttachments key={`${selectedLive.id}-${photoRevision}`} ticketId={selectedLive.id} canUpload={selectedLive.requesterId === user.uid || profile.role === "IT Admin" || (operatorPortal && canUpdateTicket(profile.role, user.uid, selectedLive))}/>
       <h3>Updates</h3>{Object.entries(selectedLive.updates || {}).sort((a,b) => a[1].createdAt - b[1].createdAt).map(([id, note]) => <div className="ticket-note" key={id}><p>{note.text}</p><small>{displayName(note.author)} · {displayDate(note.createdAt)}</small></div>)}{!selectedLive.updates && <p className="muted-cell">No updates yet.</p>}
-      {(selectedLive.requesterId === user.uid || (operatorPortal && canUpdateTicket(profile.role, user.uid, selectedLive))) && <form className="ticket-note-form" onSubmit={addNote}><label>Reply / update<textarea name="note" onPaste={pasteReply} value={replyDraft} onChange={(e) => setReplyDraft(e.target.value)} rows={3} required={!replyPhotos.length} maxLength={4000} disabled={noteBusy} placeholder="Write a reply, or paste a screenshot here (Ctrl + V)"/></label>{driveReady && <><p className="muted-cell">Paste a screenshot with Ctrl + V, or choose a photo below. Photos upload when you click Send reply. Maximum 5 photos per ticket.</p><TicketPhotoPicker files={replyPhotos} onChange={setReplyPhotos} disabled={noteBusy}/></>}{replyError && <div className="auth-message error" role="alert">{replyError}</div>}{noteBusy && <p role="status">{replyProgress} Please keep this page open.</p>}<button className="primary-btn" disabled={noteBusy}>{noteBusy ? "Sending…" : "Send reply"}</button></form>}
+      {(selectedLive.requesterId === user.uid || (operatorPortal && canUpdateTicket(profile.role, user.uid, selectedLive))) && <form className="ticket-note-form" onSubmit={addNote}><label>Reply / update<textarea name="note" onPaste={pasteReply} value={replyDraft} onChange={(e) => setReplyDraft(e.target.value)} rows={3} readOnly={!!pendingNote.current} required={!replyPhotos.length} maxLength={4000} disabled={noteBusy} placeholder="Write a reply, or paste a screenshot here (Ctrl + V)"/></label>{driveReady && <><p className="muted-cell">Paste a screenshot with Ctrl + V, or choose a photo below. Photos upload when you click Send reply. Maximum 5 photos per ticket.</p><TicketPhotoPicker files={replyPhotos} onChange={setReplyPhotos} disabled={noteBusy}/></>}{replyError && <div className="auth-message error" role="alert">{replyError}</div>}{noteBusy && <p role="status">{replyProgress} Please keep this page open.</p>}<button className="primary-btn" disabled={noteBusy}>{noteBusy ? "Sending…" : "Send reply"}</button></form>}
       {operatorPortal && profile.role === "IT Admin" && <div className="ticket-delete-section"><button type="button" className="danger-btn" onClick={() => { setDeleteError(""); setDeleteTarget(selectedLive); }}>Delete ticket</button></div>}
       </div></aside></div>}
     {deleteTarget && operatorPortal && profile.role === "IT Admin" && <div className="modal-layer" role="alertdialog" aria-modal="true" aria-labelledby="delete-ticket-title" aria-describedby="delete-ticket-description">
@@ -543,5 +601,6 @@ export default function App() {
     {toast && <div className="toast" role="status"><Check size={17}/>{toast}</div>}
   </div>;
 }
+
 
 

@@ -88,6 +88,7 @@ else {
       }
     }
     if (!smoke && app.isPackaged) updater = require('./updates.cjs').createUpdater({app,dialog,changed: () => { if (tray) trayMenu(); }});
+    if (!smoke && app.isPackaged) require('./monitoring-update.cjs').check({app,dialog}).catch(() => {});
     diagnostic('Creating tray');
     tray = new Tray(nativeImage.createFromPath(icon)); tray.setToolTip('Mountain Torq IT Helpdesk — running'); tray.on('double-click', show); trayMenu();
     ipcMain.on('mt-access', (event, data) => {
@@ -126,4 +127,5 @@ else {
     load();
   });
 }
+
 

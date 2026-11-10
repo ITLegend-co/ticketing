@@ -36,7 +36,8 @@
       "reminder.css",
       "reminder.js",
       "reminder-cat.svg",
-      "updates.cjs"
+      "updates.cjs",
+      "monitoring-update.cjs"
     ],
     "directories": {
       "output": "release"
@@ -71,4 +72,3 @@
     "electron-updater": "6.8.11"
   }
 }
-

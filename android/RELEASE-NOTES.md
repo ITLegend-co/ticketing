@@ -1,17 +1,6 @@
-# In-app Android updates
+Reliability update
 
-- Checks for newer Android releases when opening or returning to the app.
-- Adds Update now to download and open Android’s installation prompt.
-- Verifies the APK checksum, package name, signing certificate and newer version before installation.
-- Allows retrying failed downloads and cancelled installation without clearing app data.
-- Existing installations need this APK once to enable in-app updates for later releases.
-
-# Mobile ticket submission fixes
-
-- Online requests send immediately and open the submitted ticket, without an Outbox step.
-- Offline requests remain queued and upload in the background when connected.
-- Fixed normal staff background submissions being denied by conditional-write read permissions.
-- Retry now restarts waiting Android uploads without duplicating an already running worker.
-- Access-denied errors are shown separately from connection failures.
-- Existing saved tickets and photos are preserved. Install this update over the existing app; do not uninstall or clear app data.
-
+- Supports the hosted offline app shell. After opening and signing in online once, staff can reopen offline and compose saved requests. Live account permissions are verified before delivery.
+- Mobile requests interrupted by a connection failure are retained under their original ticket ID for background retry.
+- Failed attachments remain available through Retry photos without resending a ticket or reply.
+- Admin and technician permissions remain checked by Firebase when connected.

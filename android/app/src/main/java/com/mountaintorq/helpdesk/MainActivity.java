@@ -44,8 +44,8 @@ public class MainActivity extends Activity {
     setContentView(root);
     WebSettings settings=web.getSettings();
     settings.setJavaScriptEnabled(true);settings.setDomStorageEnabled(true);
-    // Fetch current hosted code after app upgrades without clearing login or the outbox.
-    settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
+    // The service worker caches only the static app shell, never authenticated API responses.
+    settings.setCacheMode(WebSettings.LOAD_DEFAULT);
     settings.setAllowFileAccess(false);settings.setAllowContentAccess(true);
     settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
     settings.setUserAgentString(settings.getUserAgentString()+" MountainTorqAndroid/"+BuildConfig.VERSION_NAME);
@@ -156,5 +156,6 @@ public class MainActivity extends Activity {
   @Override protected void onSaveInstanceState(Bundle state){web.saveState(state);super.onSaveInstanceState(state);}
   @Override protected void onDestroy(){if(chooser!=null){chooser.onReceiveValue(null);chooser=null;}if(appUpdates!=null)appUpdates.close();outboxExecutor.shutdown();web.destroy();super.onDestroy();}
 }
+
 
 

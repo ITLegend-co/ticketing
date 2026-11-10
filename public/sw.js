@@ -1,7 +1,22 @@
-// Network-only navigation: never cache ticket data, credentials, or authenticated responses.
-self.addEventListener("install",()=>self.skipWaiting());
-self.addEventListener("activate",event=>event.waitUntil(self.clients.claim()));
-self.addEventListener("fetch",event=>{
-  if(event.request.mode!=="navigate") return;
-  event.respondWith(fetch(event.request).catch(()=>new Response('<!doctype html><html lang="en"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Helpdesk offline</title><body style="font:18px system-ui;padding:32px;background:#f5f7fb;color:#172033"><h1>You are offline</h1><p>Connect to the internet to open Mountain Torq IT Helpdesk. Your tickets remain on the server.</p><button onclick="location.reload()" style="padding:14px">Try again</button></body></html>',{headers:{"Content-Type":"text/html; charset=utf-8"}})));
+// Build prepends the hashed version and exact static asset list.
+const CACHE = 'mt-helpdesk-shell-' + SHELL_VERSION;
+const ROOT = new URL('./', self.registration.scope).href;
+self.addEventListener('install', event => event.waitUntil((async () => {
+  const cache = await caches.open(CACHE);
+  await cache.addAll(SHELL_FILES.map(path => new URL(path, ROOT).href));
+  // Activate on the next launch; never replace code underneath an unsent form.
+})()));
+self.addEventListener('activate', event => event.waitUntil((async () => {
+  await Promise.all((await caches.keys()).filter(k => k.startsWith('mt-helpdesk-shell-') && k !== CACHE).map(k => caches.delete(k)));
+  await self.clients.claim();
+})()));
+self.addEventListener('fetch', event => {
+  const url = new URL(event.request.url);
+  if (event.request.method !== 'GET' || url.origin !== new URL(ROOT).origin || !url.href.startsWith(ROOT)) return;
+  // Firebase, Apps Script, authentication and ticket/photo responses never enter this cache.
+  if (event.request.mode === 'navigate') {
+    event.respondWith(fetch(event.request).catch(async () => (await caches.open(CACHE)).match(ROOT).then(r => r || Response.error())));
+  } else if (SHELL_FILES.some(path => new URL(path, ROOT).href === url.href)) {
+    event.respondWith((async () => (await (await caches.open(CACHE)).match(event.request)) || fetch(event.request))());
+  }
 });
