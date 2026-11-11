@@ -111,9 +111,9 @@ try {
     $network=@{at=$r.at}
     Add-Type -AssemblyName System.Net.Http
     $web=New-Object Net.Http.HttpClient
-    $web.Timeout=[TimeSpan]::FromSeconds(5)
+    $web.Timeout=[TimeSpan]::FromSeconds(15)
     try {
-      # Bounded, optional sample. No files or user content are uploaded.
+      # Up to 15 seconds per transfer (download and upload), once per hour. Bounded, optional sample. No files or user content are uploaded.
       $watch=[Diagnostics.Stopwatch]::StartNew()
       $bytes=$web.GetByteArrayAsync('https://speed.cloudflare.com/__down?bytes=1000000').GetAwaiter().GetResult()
       $watch.Stop();$network.downloadMbps=[Math]::Round($bytes.Length*8/[Math]::Max(.001,$watch.Elapsed.TotalSeconds)/1000000,2)
